@@ -33,9 +33,9 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private val base = Color.rgb(6, 12, 22)
-    private val glass = Color.rgb(25, 38, 56)
-    private val glass2 = Color.rgb(33, 50, 70)
+    private val base = Color.rgb(12, 12, 13)
+    private val glass = Color.rgb(30, 30, 32)
+    private val glass2 = Color.rgb(40, 40, 43)
     private val bright = Color.rgb(244, 248, 255)
     private val dim = Color.rgb(170, 187, 208)
     private val blue = Color.rgb(91, 179, 255)
@@ -56,8 +56,8 @@ class MainActivity : Activity() {
     }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun bg(color: Int, radius: Int = 18): GradientDrawable = GradientDrawable(
-        GradientDrawable.Orientation.TL_BR, intArrayOf(color, Color.rgb(14, 25, 41))
-    ).apply { cornerRadius = dp(radius).toFloat(); setStroke(dp(1), Color.rgb(58, 77, 100)) }
+        GradientDrawable.Orientation.TL_BR, intArrayOf(color, Color.rgb(20, 20, 22))
+    ).apply { cornerRadius = dp(radius).toFloat(); setStroke(dp(1), Color.rgb(65, 65, 70)) }
     private fun txt(value: String, size: Float = 15f, color: Int = bright, heavy: Boolean = false): TextView =
         TextView(this).apply {
             text = value; textSize = size; setTextColor(color)
@@ -134,13 +134,14 @@ class MainActivity : Activity() {
     // Shared dock keeps identical iconography and interaction on every page.
     private fun createDock(activePage:String):LinearLayout {
         val dock=row().apply {
-            setPadding(dp(6),dp(2),dp(6),dp(2))
+            setPadding(dp(6),dp(1),dp(6),dp(1))
             background=GradientDrawable().apply {
-                setColor(Color.argb(230,12,22,39))
+                setColor(Color.argb(179,16,16,18))
                 setStroke(dp(1),Color.argb(65,225,238,255))
             }
             elevation=dp(3).toFloat()
         }
+        dock.addView(View(this),LinearLayout.LayoutParams(0,dp(1),1f))
         listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "☰","Phone" to "☎").forEach { (name,symbol)->
             val item=col().apply {
                 gravity=Gravity.CENTER
@@ -157,8 +158,9 @@ class MainActivity : Activity() {
                     else if(page!=name)render(name)
                 }
             }
-            dock.addView(item,LinearLayout.LayoutParams(0,dp(51),1f))
+            dock.addView(item,LinearLayout.LayoutParams(dp(89),dp(46)))
         }
+        dock.addView(View(this),LinearLayout.LayoutParams(0,dp(1),1f))
         return dock
     }
     private fun showCockpit(outer: LinearLayout) {
@@ -177,7 +179,7 @@ class MainActivity : Activity() {
         })
         val priorityStrip=row().apply {
             background=GradientDrawable().apply {
-                setColor(Color.argb(210,15,26,44))
+                setColor(Color.argb(210,20,20,22))
                 cornerRadius=dp(7).toFloat()
             }
             setPadding(dp(5),0,dp(6),0)
@@ -195,17 +197,17 @@ class MainActivity : Activity() {
         val holder=col().apply {
             setPadding(dp(7),dp(7),dp(7),dp(7))
             background=GradientDrawable().apply {
-                setColor(Color.argb(235,12,25,45))
+                setColor(Color.argb(235,25,25,27))
                 cornerRadius=dp(8).toFloat()
-                setStroke(dp(1),Color.rgb(59,81,109))
+                setStroke(dp(1),Color.rgb(68,68,72))
             }
         }
         widgetHolder=holder
         stage.addView(holder,FrameLayout.LayoutParams(dp(250),-1,Gravity.TOP or Gravity.LEFT).apply {
-            setMargins(dp(12),dp(9),0,dp(64))
+            setMargins(dp(12),dp(9),0,dp(59))
         })
         drawWidgets()
-        stage.addView(createDock("Home"),FrameLayout.LayoutParams(-1,dp(55),Gravity.BOTTOM))
+        stage.addView(createDock("Home"),FrameLayout.LayoutParams(-1,dp(50),Gravity.BOTTOM))
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
@@ -444,7 +446,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.7  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.8  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
