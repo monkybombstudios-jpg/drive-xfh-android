@@ -43,7 +43,15 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private var radioView="SAVED"
     private val popularStations=mutableListOf<Triple<String,String,String>>()
     private val podcastEpisodes=mutableListOf<Pair<String,String>>()
-    private var podcastFeed=prefs.getString("podcast_feed","https://feeds.npr.org/510318/podcast.xml")?:"https://feeds.npr.org/510318/podcast.xml"
+    private var podcastFeed=prefs.getString("podcast_feed","")?:""
+    private var podcastName=prefs.getString("podcast_show_name","")?:""
+    private val podcastShows=listOf(
+        "Timcast IRL" to "https://feeds.libsyn.com/574450/rss",
+        "Podcast of the Lotus Eaters" to "https://feeds.soundcloud.com/users/soundcloud:users:896213575/sounds.rss",
+        "The Glenn Beck Program" to "https://feeds.megaphone.fm/BMDC3567910388",
+        "The Joe Rogan Experience" to "https://joeroganexp.libsyn.com/rss",
+        "NPR Up First" to "https://feeds.npr.org/510318/podcast.xml"
+    )
     private fun d(v:Int)=(v*resources.displayMetrics.density).toInt()
     private fun text(s:String,size:Float=12f,color:Int=ink,bold:Boolean=false)=TextView(activity).apply{
         text=s;textSize=size;setTextColor(color);gravity=Gravity.CENTER_VERTICAL
@@ -77,7 +85,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 tabs.addView(b,LayoutParams(0,d(31),1f).apply{rightMargin=d(2)})
             }
         }else if(mode=="PODCASTS"){
-            tabs.addView(text("RSS EPISODES",11f,blue,true),LayoutParams(-1,d(31)))
+            tabs.addView(text(if(podcastFeed.isBlank())"PODCAST LIBRARY" else podcastName.ifBlank{"PODCAST EPISODES"},11f,blue,true),LayoutParams(-1,d(31)))
         }else{
             for(tab in listOf("SAVED","POPULAR US")){
                 val b=button(tab){radioView=tab;populate();if(tab=="POPULAR US"&&popularStations.isEmpty())loadUsStations()}
@@ -88,8 +96,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         left.addView(tabs,LayoutParams(-1,d(32)))
         val controls=LinearLayout(activity).apply{orientation=HORIZONTAL}
         if(mode=="PODCASTS"){
-            controls.addView(button("CHANGE FEED"){editPodcastFeed()},LayoutParams(0,d(29),1f))
-            controls.addView(button("REFRESH"){loadPodcasts()},LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
+            controls.addView(button("◀ SHOWS"){podcastFeed="";podcastName="";prefs.edit().remove("podcast_feed").remove("podcast_show_name").apply();populate()},LayoutParams(0,d(29),1f))
+            controls.addView(button(if(podcastFeed.isBlank())"ADD RSS" else "REFRESH"){if(podcastFeed.isBlank())editPodcastFeed() else loadPodcasts()},LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
         }else{
             controls.addView(button(if(mode=="MEDIA")"◀  UP" else "+ STATION"){
                 if(mode=="MEDIA"){currentFolder=currentFolder?.parentFile;populate()}else addStation()
@@ -113,7 +121,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         addView(columns,LayoutParams(-1,0,1f))
         populate()
         showDetails()
-        if(mode=="PODCASTS")loadPodcasts()
+        if(mode=="PODCASTS" && podcastFeed.isNotBlank())loadPodcasts()
         if(mode=="RADIO"&&radioView=="POPULAR US")loadUsStations()
     }
     private fun item(title:String,subtitle:String,selected:Boolean=false,longClick:(()->Unit)?=null,click:()->Unit){
