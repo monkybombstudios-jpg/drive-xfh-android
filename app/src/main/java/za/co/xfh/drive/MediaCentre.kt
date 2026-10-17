@@ -25,6 +25,34 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         var playingArtist=""
         var playingSource="Music"
         var isPlaying=false
+        var streamPlayer:MediaPlayer?=null
+        var videoPlayer:VideoView?=null
+        var queue=mutableListOf<Pair<String,String>>()
+        var queueIndex=0
+        var queuePlay:((Int)->Unit)?=null
+        fun toggle(){
+            try{
+                if(playingSource=="Video"){videoPlayer?.let{if(it.isPlaying)it.pause() else it.start();isPlaying=it.isPlaying}}
+                else (if(playingSource=="Radio"||playingSource=="Podcast")streamPlayer else player)?.let{
+                    if(it.isPlaying)it.pause() else it.start()
+                    isPlaying=it.isPlaying
+                }
+            }catch(_:Exception){}
+        }
+        fun skip(delta:Int){
+            if(queue.isNotEmpty()){
+                queueIndex=(queueIndex+delta+queue.size)%queue.size
+                queuePlay?.invoke(queueIndex)
+            }
+        }
+        fun seek(percent:Int){
+            try{
+                if(playingSource=="Video")videoPlayer?.let{if(it.duration>0)it.seekTo(it.duration*percent/100)}
+                else (if(playingSource=="Podcast")streamPlayer else player)?.let{if(it.duration>0)it.seekTo(it.duration*percent/100)}
+            }catch(_:Exception){}
+        }
+        fun duration():Int=try{if(playingSource=="Video")videoPlayer?.duration?:0 else (if(playingSource=="Podcast")streamPlayer else player)?.duration?:0}catch(_:Exception){0}
+        fun position():Int=try{if(playingSource=="Video")videoPlayer?.currentPosition?:0 else (if(playingSource=="Podcast")streamPlayer else player)?.currentPosition?:0}catch(_:Exception){0}
         fun stop() { try {player?.release()}catch(_:Exception){};player=null;isPlaying=false;playingUri=null }
     }
     private val prefs=activity.getSharedPreferences("drive_xfh",Activity.MODE_PRIVATE)
@@ -152,13 +180,15 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 item("＋  Custom podcast RSS","Add another show"){editPodcastFeed()}
             }else{
                 if(podcastEpisodes.isEmpty())item("Loading episodes…","Fetching "+podcastName){}
-                for((title,url) in podcastEpisodes)item("♫  "+title,podcastName,playingName==title){playStream(title,url,"Podcast")}
+                queue=podcastEpisodes.toMutableList();queuePlay={index->queue.getOrNull(index)?.let{playStream(it.first,it.second,"Podcast")}}
+            for((title,url) in podcastEpisodes)item("♫  "+title,podcastName,playingName==title){playStream(title,url,"Podcast")}
             }
             return
         }
         if(mode=="RADIO"){
             if(radioView=="POPULAR US"){
                 if(popularStations.isEmpty())item("Popular US stations","Fetching live directory…"){}
+                queue=popularStations.map{it.first to it.second}.toMutableList();queuePlay={index->queue.getOrNull(index)?.let{playStream(it.first,it.second)}}
                 for((name,url,details) in popularStations){
                     item(name,details+" · hold to save",playingSource=="Radio"&&playingName==name,
                         longClick={saveStation(name,url)}){playStream(name,url)}
@@ -166,6 +196,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             }else{
                 val saved=stations()
                 if(saved.length()==0)item("No stations saved","Select POPULAR US or use + STATION"){}
+                queue=(0 until saved.length()).mapNotNull{saved.optJSONObject(it)?.let{st->st.optString("name") to st.optString("url")}}.toMutableList();queuePlay={index->queue.getOrNull(index)?.let{playStream(it.first,it.second)}}
                 for(i in 0 until saved.length()){
                     val st=saved.optJSONObject(i)?:continue
                     val title=st.optString("name","Station")
@@ -179,6 +210,9 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         if(folder==null){item("No media folder selected","Tap CHOOSE FOLDER to allow SD card or phone access"){};return}
         val files=try{folder.listFiles().sortedWith(compareBy<DocumentFile>{!it.isDirectory}.thenBy{it.name?.lowercase()?:""})}catch(_:Exception){emptyList()}
         if(files.isEmpty())item("Folder is empty","Select a different folder"){}
+        val playable=files.filter{it.isFile && (it.type?.startsWith("audio/")==true || it.type?.startsWith("video/")==true)}
+        queue=playable.map{(it.name?:"Media") to it.uri.toString()}.toMutableList()
+        queuePlay={index->playable.getOrNull(index)?.let{playFile(it,it.type?.startsWith("video/")==true)}}
         for(f in files){
             val type=f.type?:""
             val video=type.startsWith("video/")||listOf("mp4","mkv","webm","3gp").any{f.name?.endsWith("."+it,true)==true}
@@ -192,6 +226,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     }
     private fun playFile(f:DocumentFile,isVideo:Boolean){
         val uri=f.uri
+        queueIndex=queue.indexOfFirst{it.second==uri.toString()}.coerceAtLeast(0)
         try{
             releaseRadio()
             if(isVideo){
@@ -325,12 +360,13 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 }else Toast.makeText(activity,"Enter a name and a direct HTTPS stream URL",Toast.LENGTH_LONG).show()
             }.setNegativeButton("CANCEL",null).show()
     }
-    private fun releaseRadio(){try{activeRadio?.release()}catch(_:Exception){};activeRadio=null}
+    private fun releaseRadio(){try{activeRadio?.release()}catch(_:Exception){};activeRadio=null;streamPlayer=null}
     private fun playStream(name:String,url:String,source:String="Radio"){
         releaseRadio();stop()
+        queueIndex=queue.indexOfFirst{it.second==url}.coerceAtLeast(0)
         playingName=name;playingArtist=if(source=="Podcast")"Podcast episode" else "Internet radio";playingSource=source;isPlaying=false
         showDetails()
-        val p=MediaPlayer();activeRadio=p
+        val p=MediaPlayer();activeRadio=p;streamPlayer=p
         try{
             p.setDataSource(url)
             p.setOnPreparedListener{it.start();isPlaying=true;showDetails()}
@@ -360,7 +396,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 }
                 setOnCompletionListener{MediaCentre.isPlaying=false}
             }
-            video=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))
+            video=v;videoPlayer=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))
         }else{
             val art=ImageView(activity).apply{scaleType=ImageView.ScaleType.FIT_CENTER}
             if(playingSource=="Music"&&playingUri!=null)try{
@@ -390,7 +426,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     }
     fun refreshFolder(){currentFolder=null;populate()}
     override fun onDetachedFromWindow(){
-        video?.stopPlayback();video=null
+        video?.stopPlayback();video=null;videoPlayer=null
         super.onDetachedFromWindow()
     }
 }
