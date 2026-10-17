@@ -127,16 +127,40 @@ class MainActivity : Activity() {
                 "Settings" -> showSettings(content)
             }
         }
-        val dock = row().apply { background = bg(Color.rgb(13,25,41),0); setPadding(dp(8),dp(3),dp(8),dp(3)) }
-        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "☰","Phone" to "☎").forEach { (name,icon)->
-            val button = txt("${if(name=="Phone") "☏" else icon}  $name",14f,if(to==name)blue else dim,true).apply {
-                gravity=Gravity.CENTER; setOnClickListener { if(name=="Phone") open(Intent(Intent.ACTION_DIAL)) else if(page!=name) render(name) }
-            }
-            dock.addView(button,LinearLayout.LayoutParams(0,dp(42),1f))
-        }
-        outer.addView(dock)
+        outer.addView(createDock(to))
     }
 
+
+    // Shared dock keeps identical iconography and interaction on every page.
+    private fun createDock(activePage:String):LinearLayout {
+        val dock=row().apply {
+            setPadding(dp(6),dp(2),dp(6),dp(2))
+            background=GradientDrawable().apply {
+                setColor(Color.argb(230,12,22,39))
+                setStroke(dp(1),Color.argb(65,225,238,255))
+            }
+            elevation=dp(3).toFloat()
+        }
+        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "☰","Phone" to "☎").forEach { (name,symbol)->
+            val item=col().apply {
+                gravity=Gravity.CENTER
+                if(name=="Phone") {
+                    addView(ImageView(this@MainActivity).apply {
+                        setImageResource(android.R.drawable.ic_menu_call)
+                        setColorFilter(Color.WHITE)
+                        setPadding(dp(4),dp(3),dp(4),dp(3))
+                    },LinearLayout.LayoutParams(dp(29),dp(29)))
+                } else addView(txt(symbol,21f,if(name==activePage)blue else bright,true).apply {gravity=Gravity.CENTER})
+                addView(txt(name.uppercase(),10f,if(name==activePage)blue else dim).apply {gravity=Gravity.CENTER})
+                setOnClickListener {
+                    if(name=="Phone")open(Intent(Intent.ACTION_DIAL))
+                    else if(page!=name)render(name)
+                }
+            }
+            dock.addView(item,LinearLayout.LayoutParams(0,dp(51),1f))
+        }
+        return dock
+    }
     private fun showCockpit(outer: LinearLayout) {
         val stage=FrameLayout(this)
         outer.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
@@ -177,34 +201,11 @@ class MainActivity : Activity() {
             }
         }
         widgetHolder=holder
-        stage.addView(holder,FrameLayout.LayoutParams(dp(250),-2,Gravity.TOP or Gravity.LEFT).apply {
-            setMargins(dp(12),dp(9),0,0)
+        stage.addView(holder,FrameLayout.LayoutParams(dp(250),-1,Gravity.TOP or Gravity.LEFT).apply {
+            setMargins(dp(12),dp(9),0,dp(64))
         })
         drawWidgets()
-        val dock=row().apply {
-            setPadding(dp(6),dp(2),dp(6),dp(2))
-            setBackgroundColor(Color.rgb(12,22,39))
-        }
-        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "☰","Phone" to "☎").forEach { (name,symbol)->
-            val item=col().apply {
-                gravity=Gravity.CENTER
-                if(name=="Phone") {
-                    addView(ImageView(this@MainActivity).apply{
-                        setImageResource(android.R.drawable.ic_menu_call)
-                        setColorFilter(Color.WHITE)
-                        setPadding(dp(4),dp(3),dp(4),dp(3))
-                    },LinearLayout.LayoutParams(dp(29),dp(29)))
-                } else {
-                    addView(txt(symbol,21f,if(name=="Home")blue else bright,true).apply {gravity=Gravity.CENTER})
-                }
-                addView(txt(name.uppercase(),10f,if(name=="Home")blue else dim).apply {gravity=Gravity.CENTER})
-                setOnClickListener {
-                    if(name=="Phone") open(Intent(Intent.ACTION_DIAL)) else render(name)
-                }
-            }
-            dock.addView(item,LinearLayout.LayoutParams(0,dp(51),1f))
-        }
-        stage.addView(dock,FrameLayout.LayoutParams(-1,dp(55),Gravity.BOTTOM))
+        stage.addView(createDock("Home"),FrameLayout.LayoutParams(-1,dp(55),Gravity.BOTTOM))
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
@@ -233,7 +234,7 @@ class MainActivity : Activity() {
             }
             tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
             tile.setOnClickListener{expandWidget(name)}
-            holder.addView(tile,LinearLayout.LayoutParams(-1,dp(83)).apply {if(pos>0)topMargin=dp(5)})
+            holder.addView(tile,LinearLayout.LayoutParams(-1,0,1f).apply {if(pos>0)topMargin=dp(5)})
         }
         val controls=row().apply {gravity=Gravity.CENTER}
         val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+widgetNames.size-1)%widgetNames.size;drawWidgets()}}
@@ -443,7 +444,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.6  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.7  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
