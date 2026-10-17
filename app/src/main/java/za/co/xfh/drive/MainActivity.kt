@@ -459,39 +459,55 @@ class MainActivity : Activity() {
     }
     private fun showRouteGuidance(stage:FrameLayout) {
         val steps=try{org.json.JSONArray(prefs.getString("route_steps","[]"))}catch(_:Exception){return}
-        if(steps.length()==0)return
-        val guidance=txt("Route ready",12f,bright,true).apply{
-            background=bg(glass,8)
-            setPadding(dp(10),dp(6),dp(10),dp(6))
-            maxLines=2
+        val route=savedRoutePoints()
+        if(steps.length()==0 || route.size<2)return
+        val guidance=txt("Route preview",12f,bright,true).apply{
+            background=bg(glass,8);setPadding(dp(10),dp(6),dp(10),dp(6));maxLines=2
         }
         stage.addView(guidance,FrameLayout.LayoutParams(dp(230),dp(50),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=dp(52)})
         val lm=getSystemService(LOCATION_SERVICE) as android.location.LocationManager
-        val update:(android.location.Location)->Unit={location->
-            try{
-                var nearest=0
-                var best=Double.MAX_VALUE
-                for(i in 0 until steps.length()){
-                    val obj=steps.getJSONObject(i)
-                    val result=FloatArray(1)
-                    android.location.Location.distanceBetween(location.latitude,location.longitude,
-                        obj.getDouble("lat"),obj.getDouble("lon"),result)
-                    if(result[0]<best){best=result[0].toDouble();nearest=i}
-                }
-                var chosen=nearest
-                if(best<35.0 && chosen<steps.length()-1)chosen++
-                val step=steps.getJSONObject(chosen)
-                val distance=FloatArray(1)
-                android.location.Location.distanceBetween(location.latitude,location.longitude,
-                    step.getDouble("lat"),step.getDouble("lon"),distance)
-                val instruction=step.optString("instruction","Continue")
-                guidance.text=String.format(Locale.US,"%.0f m  •  %s",distance[0],instruction)
-            }catch(_:Exception){}
+        val cumulative=DoubleArray(route.size)
+        fun metres(a:GeoPoint,b:GeoPoint):Double {
+            val out=FloatArray(1)
+            android.location.Location.distanceBetween(a.latitude,a.longitude,b.latitude,b.longitude,out)
+            return out[0].toDouble()
         }
+        for(i in 1 until route.size)cumulative[i]=cumulative[i-1]+metres(route[i-1],route[i])
+        fun closestIndex(lat:Double,lon:Double):Pair<Int,Double> {
+            val at=GeoPoint(lat,lon)
+            var index=0;var best=Double.MAX_VALUE
+            for(i in route.indices){
+                val distance=metres(at,route[i])
+                if(distance<best){best=distance;index=i}
+            }
+            return index to best
+        }
+        val stepsAlong=mutableListOf<Pair<Int,String>>()
+        for(i in 0 until steps.length()){
+            val step=steps.getJSONObject(i)
+            val point=closestIndex(step.getDouble("lat"),step.getDouble("lon")).first
+            val instruction=step.optString("instruction","Continue")
+            stepsAlong.add(point to instruction)
+        }
+        // Avoid using a stale GPS reading kilometres away from the planned route.
+        val update:(android.location.Location?)->Unit={ location->
+            val nearest=if(location!=null)closestIndex(location.latitude,location.longitude) else 0 to Double.MAX_VALUE
+            val preview=nearest.second>250.0
+            val currentIndex=if(preview)0 else nearest.first
+            val next=stepsAlong.firstOrNull {it.first>currentIndex+1}
+            val distance=if(next!=null)(cumulative[next.first]-cumulative[currentIndex]).coerceAtLeast(0.0) else 0.0
+            val caption=next?.second ?: "Arriving at destination"
+            val formatted=if(distance>=1000.0)String.format(Locale.US,"%.1f km",distance/1000.0)
+                          else String.format(Locale.US,"%.0f m",distance)
+            guidance.text=(if(preview)"PREVIEW · " else "")+formatted+"  •  "+caption
+        }
+        update(null)
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){
             try{
-                lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)?.let(update)
+                val last=lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                    ?:lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                update(last)
                 lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER,3000L,8f,object:android.location.LocationListener{
                     override fun onLocationChanged(location:android.location.Location){
                         if(page=="Home" && guidance.parent!=null)update(location)
@@ -499,7 +515,7 @@ class MainActivity : Activity() {
                     }
                 })
             }catch(_:Exception){}
-        }else guidance.text=prefs.getString("route_summary","Route ready")
+        }
     }
     private fun showMap(target: LinearLayout) {
         target.addView(txt("NAVIGATION  •  ROUTE PLANNER",15f,bright,true),lp(-1,dp(27)))
@@ -716,7 +732,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.14.1  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.14.2  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
