@@ -106,12 +106,13 @@ class MainActivity : Activity() {
         page = to
         val outer = col().apply { setBackgroundColor(base) }
         setContentView(outer)
+        if(to=="Home") { showCockpit(outer); return }
+        // Interior page headers stay unchanged until their layouts are redesigned.
         val top = row().apply { setPadding(dp(18),dp(8),dp(14),dp(6)) }
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
         top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
         outer.addView(top)
-        if(to=="Home") { showCockpit(outer); return }
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
         if(to == "Map") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
@@ -150,7 +151,23 @@ class MainActivity : Activity() {
         },FrameLayout.LayoutParams(dp(4),dp(65),Gravity.RIGHT or Gravity.CENTER_VERTICAL).apply {
             rightMargin=dp(6)
         })
-        stage.addView(txt(batteryStatus(),12f,bright,true).apply{background=bg(glass2,6)},FrameLayout.LayoutParams(-2,dp(36),Gravity.RIGHT or Gravity.TOP))
+        val priorityStrip=row().apply {
+            background=GradientDrawable().apply {
+                setColor(Color.argb(210,15,26,44))
+                cornerRadius=dp(7).toFloat()
+            }
+            setPadding(dp(5),0,dp(6),0)
+        }
+        priorityStrip.addView(txt(batteryStatus(),12f,bright,true))
+        priorityStrip.addView(txt("⚙",22f,Color.WHITE,true).apply {
+            gravity=Gravity.CENTER
+            contentDescription="Settings"
+            setOnClickListener { render("Settings") }
+        },LinearLayout.LayoutParams(dp(38),dp(36)))
+        stage.addView(priorityStrip,FrameLayout.LayoutParams(-2,dp(36),Gravity.RIGHT or Gravity.TOP).apply {
+            rightMargin=dp(24)
+            topMargin=dp(8)
+        })
         val holder=col().apply {
             setPadding(dp(7),dp(7),dp(7),dp(7))
             background=GradientDrawable().apply {
@@ -426,7 +443,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.5  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.6  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
