@@ -142,6 +142,7 @@ class MainActivity : Activity() {
     private fun dockArtwork(name:String,selected:Boolean):View {
         if(name=="Phone") return ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_call)
+            rotation = 180f
             setColorFilter(if(selected)blue else bright)
             scaleType=ImageView.ScaleType.FIT_CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2))
@@ -476,7 +477,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.10  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.11  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
