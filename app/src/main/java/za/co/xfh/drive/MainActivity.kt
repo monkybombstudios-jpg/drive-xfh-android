@@ -120,7 +120,6 @@ class MainActivity : Activity() {
             scroller.addView(content)
             outer.addView(scroller,LinearLayout.LayoutParams(-1,0,1f))
             when(to) {
-                "Home" -> showHome(content)
                 "Media" -> showMedia(content)
                 "Apps" -> showApps(content)
                 "Settings" -> showSettings(content)
