@@ -46,6 +46,7 @@ class MainActivity : Activity() {
     private var page = "Home"
     private var map: MapView? = null
     private var widgetIndex=0
+    private var stageView:FrameLayout?=null
     private var widgetHolder: LinearLayout?=null
     private val tick = object : Runnable {
         override fun run() {
@@ -138,8 +139,10 @@ class MainActivity : Activity() {
     private fun showCockpit(outer: LinearLayout) {
         val stage=FrameLayout(this)
         outer.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
-        val m=createMap()
-        stage.addView(m,FrameLayout.LayoutParams(-1,-1))
+        stageView=stage
+        showBackdrop(stage)
+        stage.addView(txt("┃ BACKGROUND",12f,bright,true).apply{background=bg(glass2,6);setOnClickListener{chooseBackdrop()}},FrameLayout.LayoutParams(-2,dp(42),Gravity.RIGHT or Gravity.CENTER_VERTICAL))
+        stage.addView(txt(batteryStatus(),12f,bright,true).apply{background=bg(glass2,6)},FrameLayout.LayoutParams(-2,dp(36),Gravity.RIGHT or Gravity.TOP))
         val holder=col().apply {
             setPadding(dp(7),dp(7),dp(7),dp(7))
             background=GradientDrawable().apply {
@@ -172,7 +175,7 @@ class MainActivity : Activity() {
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
-    private val widgetNames=listOf("Weather","Clock","Now Playing","Shortcuts")
+    private val widgetNames=listOf("Radio","Mirror","Video","Now Playing","Clock","Weather")
     private fun widgetCard(heading:String,body:String,large:Boolean=false)=col().apply {
         setPadding(dp(9),dp(5),dp(8),dp(5))
         background=bg(glass2,6)
@@ -186,19 +189,24 @@ class MainActivity : Activity() {
         repeat(2) { pos->
             val name=widgetNames[(widgetIndex+pos)%widgetNames.size]
             val tile=when(name) {
+                "Radio"->widgetCard("RADIO","Audio player")
+                "Mirror"->widgetCard("MIRROR","Phone connection")
+                "Video"->widgetCard("VIDEO","Local video player")
                 "Weather"->widgetCard("WEATHER","Local weather\nNot configured")
                 "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
                     SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
                 "Now Playing"->widgetCard("NOW PLAYING",nowTitle()).apply{setOnClickListener{render("Media")}}
                 else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
             }
+            tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
+            tile.setOnClickListener{expandWidget(name)}
             holder.addView(tile,LinearLayout.LayoutParams(-1,dp(83)).apply {if(pos>0)topMargin=dp(5)})
         }
         val controls=row().apply {gravity=Gravity.CENTER}
-        val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+3)%4;drawWidgets()}}
-        val down=txt("▼",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+1)%4;drawWidgets()}}
+        val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+widgetNames.size-1)%widgetNames.size;drawWidgets()}}
+        val down=txt("▼",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+1)%widgetNames.size;drawWidgets()}}
         controls.addView(up,LinearLayout.LayoutParams(dp(40),dp(28)))
-        controls.addView(txt("WIDGETS  ${widgetIndex+1}/4",10f,dim).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(28),1f))
+        controls.addView(txt("WIDGETS  ${widgetIndex+1}/${widgetNames.size}",10f,dim).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(28),1f))
         controls.addView(down,LinearLayout.LayoutParams(dp(40),dp(28)))
         holder.addView(controls)
         var startY=0f
@@ -208,7 +216,7 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_UP -> {
                     val dy=e.y-startY
                     if(kotlin.math.abs(dy)>dp(25)) {
-                        widgetIndex=(widgetIndex+if(dy<0)1 else 3)%4
+                        widgetIndex=(widgetIndex+if(dy<0)1 else widgetNames.size-1)%widgetNames.size
                         drawWidgets()
                     }
                     true
@@ -340,7 +348,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.3  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.4  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
