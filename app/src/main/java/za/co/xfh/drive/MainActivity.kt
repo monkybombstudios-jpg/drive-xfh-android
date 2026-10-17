@@ -309,7 +309,9 @@ class MainActivity : Activity() {
                 return
             } catch(_:Exception) {}
         }
-        stage.addView(createMap(),FrameLayout.LayoutParams(-1,-1))
+        val activeMap=createMap()
+        stage.addView(activeMap,FrameLayout.LayoutParams(-1,-1))
+        displaySavedRoute(activeMap)
     }
     private fun chooseBackdrop() {
         AlertDialog.Builder(this).setTitle("Cockpit background")
@@ -411,16 +413,138 @@ class MainActivity : Activity() {
         target.addView(buttons)
         target.addView(action("REFRESH NOW PLAYING"){render("Media")})
     }
+
     private fun showMap(target: LinearLayout) {
-        val head=row()
-        head.addView(txt("NAVIGATION  •  OpenStreetMap",17f,bright,true),LinearLayout.LayoutParams(0,dp(39),1f))
-        head.addView(action("⌖  MY LOCATION"){moveToUser()})
-        target.addView(head)
+        target.addView(txt("NAVIGATION  •  ROUTE PLANNER",17f,bright,true))
+        val body=row().apply{gravity=Gravity.TOP}
+        target.addView(body,LinearLayout.LayoutParams(-1,0,1f))
+        val panel=col().apply{background=bg(glass,8);setPadding(dp(9),dp(4),dp(9),dp(4))}
+        body.addView(panel,LinearLayout.LayoutParams(dp(265),-1))
+        val home=EditText(this).apply{
+            setSingleLine(true);setText(prefs.getString("nav_home",""))
+            hint="Home address";textSize=12f;setTextColor(bright);setHintTextColor(dim)
+        }
+        panel.addView(txt("HOME ADDRESS",10f,blue,true))
+        panel.addView(home,lp(-1,dp(36)))
+        panel.addView(action("SAVE HOME") {
+            prefs.edit().putString("nav_home",home.text.toString().trim()).apply()
+            Toast.makeText(this,"Home saved",Toast.LENGTH_SHORT).show()
+        },lp(-1,dp(32)))
+        val fromHome=CheckBox(this).apply{
+            text="Start at Home (otherwise GPS)"
+            textSize=11f;setTextColor(bright)
+            isChecked=prefs.getBoolean("nav_from_home",false)
+            setOnCheckedChangeListener{_,yes->prefs.edit().putBoolean("nav_from_home",yes).apply()}
+        }
+        panel.addView(fromHome)
+        val destination=EditText(this).apply{
+            setSingleLine(true);setText(prefs.getString("nav_draft",""))
+            hint="Destination address";textSize=12f;setTextColor(bright);setHintTextColor(dim)
+        }
+        panel.addView(txt("DESTINATION",10f,blue,true))
+        panel.addView(destination,lp(-1,dp(36)))
+        val status=txt("Internet required for route calculation.",10f,dim)
+        lateinit var calculate:TextView
+        calculate=action("CALCULATE ROUTE") {
+            prefs.edit().putString("nav_draft",destination.text.toString()).apply()
+            planRoute(fromHome.isChecked,home.text.toString().trim(),destination.text.toString().trim(),status,calculate)
+        }
+        panel.addView(calculate,lp(-1,dp(39)))
+        panel.addView(status)
         val m=createMap()
-        target.addView(m,LinearLayout.LayoutParams(-1,0,1f))
-        target.addView(txt("Map tiles require data. Pan and pinch to zoom. Route guidance is planned for a later release.",11f,dim))
-        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
+        body.addView(m,LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(8)})
+        displaySavedRoute(m)
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
+    }
+    private fun savedRoutePoints():List<GeoPoint> = try {
+        val arr=org.json.JSONArray(prefs.getString("route_points","[]"))
+        (0 until arr.length()).map { i->val p=arr.getJSONArray(i);GeoPoint(p.getDouble(0),p.getDouble(1))}
+    }catch(_:Exception){emptyList()}
+    private fun displaySavedRoute(m:MapView) {
+        val pts=savedRoutePoints()
+        if(pts.size<2)return
+        m.overlays.add(org.osmdroid.views.overlay.Polyline().apply{
+            setPoints(pts);outlinePaint.color=blue;outlinePaint.strokeWidth=dp(6).toFloat()
+        })
+        m.overlays.add(org.osmdroid.views.overlay.Marker(m).apply{
+            position=pts.last();title=prefs.getString("route_destination","Destination")
+            setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM)
+        })
+        m.post{
+            if(map===m)try{
+                m.zoomToBoundingBox(org.osmdroid.util.BoundingBox.fromGeoPoints(pts),true,dp(40))
+            }catch(_:Exception){}
+        }
+        m.invalidate()
+    }
+    private fun geocode(address:String):GeoPoint {
+        val url="https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+
+            java.net.URLEncoder.encode(address,"UTF-8")
+        val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout=12000;c.readTimeout=12000
+        c.setRequestProperty("User-Agent","DriveXFH/0.12 personal navigation prototype")
+        try{
+            if(c.responseCode!=200)throw Exception("Address lookup unavailable: "+c.responseCode)
+            val arr=org.json.JSONArray(c.inputStream.bufferedReader().use{it.readText()})
+            if(arr.length()==0)throw Exception("Address not found: "+address)
+            val p=arr.getJSONObject(0)
+            return GeoPoint(p.getDouble("lat"),p.getDouble("lon"))
+        }finally{c.disconnect()}
+    }
+    private fun gpsStart():GeoPoint {
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED &&
+           checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
+            throw Exception("Enable location access, or start from Home.")
+        val manager=getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+        val last=try {
+            manager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                ?:manager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+        }catch(_:SecurityException){null}
+        if(last==null)throw Exception("Waiting for GPS fix. Use saved Home meanwhile.")
+        return GeoPoint(last.latitude,last.longitude)
+    }
+    private fun planRoute(fromHome:Boolean,home:String,dest:String,status:TextView,button:TextView) {
+        if(dest.isBlank()){status.text="Enter destination.";return}
+        if(fromHome&&home.isBlank()){status.text="Enter Home address.";return}
+        status.text="Calculating route…";button.isEnabled=false
+        Thread {
+            try{
+                val start=if(fromHome)geocode(home) else gpsStart()
+                if(fromHome)Thread.sleep(1200)
+                val finish=geocode(dest)
+                val url="https://router.project-osrm.org/route/v1/driving/"+
+                    start.longitude+","+start.latitude+";"+finish.longitude+","+finish.latitude+
+                    "?overview=full&geometries=geojson&steps=true"
+                val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=15000;c.readTimeout=20000
+                c.setRequestProperty("User-Agent","DriveXFH/0.12 prototype")
+                val payload=try{
+                    if(c.responseCode!=200)throw Exception("Routing unavailable: "+c.responseCode)
+                    org.json.JSONObject(c.inputStream.bufferedReader().use{it.readText()})
+                }finally{c.disconnect()}
+                val routes=payload.getJSONArray("routes")
+                if(routes.length()==0)throw Exception("No driving route found.")
+                val route=routes.getJSONObject(0)
+                val coords=route.getJSONObject("geometry").getJSONArray("coordinates")
+                val arr=org.json.JSONArray()
+                for(i in 0 until coords.length()){
+                    val p=coords.getJSONArray(i)
+                    arr.put(org.json.JSONArray().put(p.getDouble(1)).put(p.getDouble(0)))
+                }
+                if(arr.length()<2)throw Exception("Empty route returned.")
+                val summary=String.format(Locale.US,"%.1f km · %.0f min",route.getDouble("distance")/1000.0,route.getDouble("duration")/60.0)
+                runOnUiThread {
+                    prefs.edit().putString("route_points",arr.toString())
+                        .putString("route_destination",dest).putString("route_summary",summary)
+                        .putString("backdrop","map").apply()
+                    Toast.makeText(this,"Route ready: "+summary,Toast.LENGTH_LONG).show()
+                    render("Home")
+                }
+            }catch(e:Exception){
+                runOnUiThread {status.text=e.message?:"Route failed. Check internet.";button.isEnabled=true}
+            }
+        }.start()
     }
     private fun enableLocation() {
         val m=map ?:return
@@ -478,7 +602,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.11  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.12  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
