@@ -134,33 +134,49 @@ class MainActivity : Activity() {
     // Shared dock keeps identical iconography and interaction on every page.
     private fun createDock(activePage:String):LinearLayout {
         val dock=row().apply {
-            setPadding(dp(6),dp(1),dp(6),dp(1))
+            gravity=Gravity.CENTER
+            setPadding(dp(8),0,dp(8),0)
             background=GradientDrawable().apply {
                 setColor(Color.argb(179,16,16,18))
                 setStroke(dp(1),Color.argb(65,225,238,255))
             }
             elevation=dp(3).toFloat()
         }
-        dock.addView(View(this),LinearLayout.LayoutParams(0,dp(1),1f))
-        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "☰","Phone" to "☎").forEach { (name,symbol)->
-            val item=col().apply {
-                gravity=Gravity.CENTER
-                if(name=="Phone") {
-                    addView(ImageView(this@MainActivity).apply {
-                        setImageResource(android.R.drawable.ic_menu_call)
-                        setColorFilter(Color.WHITE)
-                        setPadding(dp(4),dp(3),dp(4),dp(3))
-                    },LinearLayout.LayoutParams(dp(29),dp(29)))
-                } else addView(txt(symbol,21f,if(name==activePage)blue else bright,true).apply {gravity=Gravity.CENTER})
-                addView(txt(name.uppercase(),10f,if(name==activePage)blue else dim).apply {gravity=Gravity.CENTER})
+        // Icon-only buttons avoid clipped labels on the compact 50dp dock.
+        listOf("Media" to "♫","Map" to "◎","Home" to "⌂","Apps" to "▦","Phone" to "phone").forEach { (name,symbol)->
+            val selected=name==activePage
+            val item=FrameLayout(this).apply {
+                contentDescription=name
+                isClickable=true
+                isFocusable=true
                 setOnClickListener {
                     if(name=="Phone")open(Intent(Intent.ACTION_DIAL))
                     else if(page!=name)render(name)
                 }
             }
-            dock.addView(item,LinearLayout.LayoutParams(dp(89),dp(46)))
+            val icon:View=if(name=="Phone") ImageView(this).apply {
+                setImageResource(android.R.drawable.ic_menu_call)
+                setColorFilter(if(selected) blue else bright)
+                scaleType=ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(2),dp(2),dp(2),dp(2))
+            } else txt(symbol,24f,if(selected)blue else bright,true).apply {
+                gravity=Gravity.CENTER
+                includeFontPadding=false
+                setPadding(0,0,0,0)
+            }
+            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER))
+            if(selected) {
+                val indicator=View(this).apply {
+                    background=GradientDrawable().apply {
+                        setColor(blue);cornerRadius=dp(2).toFloat()
+                    }
+                }
+                item.addView(indicator,FrameLayout.LayoutParams(dp(26),dp(2),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{
+                    bottomMargin=dp(2)
+                })
+            }
+            dock.addView(item,LinearLayout.LayoutParams(dp(65),-1))
         }
-        dock.addView(View(this),LinearLayout.LayoutParams(0,dp(1),1f))
         return dock
     }
     private fun showCockpit(outer: LinearLayout) {
@@ -446,7 +462,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.8  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.9  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
