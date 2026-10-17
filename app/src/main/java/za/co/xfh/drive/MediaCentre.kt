@@ -72,6 +72,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private var activeRadio:MediaPlayer?=null
     private var radioView="SAVED"
     private val popularStations=mutableListOf<Triple<String,String,String>>()
+    private val stationCovers=mutableMapOf<String,String>()
+    private var podcastCoverUrl=""
     private val podcastEpisodes=mutableListOf<Pair<String,String>>()
     private var podcastFeed=prefs.getString("podcast_feed","")?:""
     private var podcastName=prefs.getString("podcast_show_name","")?:""
@@ -282,6 +284,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                     val xml=android.util.Xml.newPullParser()
                     xml.setInput(c.inputStream,"UTF-8")
                     var inItem=false;var currentTitle="";var audio=""
+                    podcastCoverUrl=""
                     var event=xml.eventType
                     while(event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT && result.size<60){
                         val tag=xml.name?:""
@@ -289,6 +292,10 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                             if(tag=="item"){inItem=true;currentTitle="";audio=""}
                             else if(inItem && tag=="title")currentTitle=xml.nextText().trim()
                             else if(inItem && tag=="enclosure")audio=xml.getAttributeValue(null,"url")?:""
+                            else if(!inItem && tag=="image"){
+                                val href=xml.getAttributeValue(null,"href")?:""
+                                if(href.startsWith("https://"))podcastCoverUrl=href
+                            }
                         }else if(event==org.xmlpull.v1.XmlPullParser.END_TAG && tag=="item"){
                             if(audio.startsWith("https://")||audio.startsWith("http://"))result.add((currentTitle.ifBlank{"Episode"}) to audio)
                             inItem=false
@@ -336,6 +343,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                         val tags=station.optString("tags").split(",").take(2).joinToString(" · ")
                         val details=listOf(station.optString("state"),tags).filter{it.isNotBlank()}.joinToString(" · ")
                         entries.add(Triple(name,url,details))
+                        val favicon=station.optString("favicon")
+                        if(favicon.startsWith("https://"))stationCovers[url]=favicon
                     }
                 }finally{c.disconnect()}
                 activity.runOnUiThread{
@@ -366,11 +375,26 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             }.setNegativeButton("CANCEL",null).show()
     }
     private fun releaseRadio(){try{streamPlayer?.release()}catch(_:Exception){};activeRadio=null;streamPlayer=null}
+    private fun loadCover(url:String,name:String){
+        if(!url.startsWith("https://"))return
+        Thread{
+            try{
+                val connection=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout=7000;connection.readTimeout=7000
+                val picture=try{
+                    if(connection.responseCode!=200||connection.contentLength>2000000)throw Exception("No artwork")
+                    BitmapFactory.decodeStream(connection.inputStream)
+                }finally{connection.disconnect()}
+                activity.runOnUiThread{if(playingName==name&&picture!=null){cover=picture;showDetails()}}
+            }catch(_:Exception){}
+        }.start()
+    }
     private fun playStream(name:String,url:String,source:String="Radio"){
         releaseRadio();stop()
         queueIndex=queue.indexOfFirst{it.second==url}.coerceAtLeast(0)
         cover=null
         playingName=name;playingArtist=if(source=="Podcast")"Podcast episode" else "Internet radio";playingSource=source;isPlaying=false
+        loadCover(if(source=="Podcast")podcastCoverUrl else stationCovers[url]?:"",name)
         showDetails()
         val p=MediaPlayer();activeRadio=p;streamPlayer=p
         try{
