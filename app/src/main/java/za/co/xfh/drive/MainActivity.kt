@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var page = "Home"
     private var map: MapView? = null
+    private var styledMap: StyledMapPanel? = null
     private var widgetIndex=0
     private var stageView:FrameLayout?=null
     private var widgetHolder: LinearLayout?=null
@@ -88,6 +89,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = packageName
+        org.maplibre.android.MapLibre.getInstance(this)
         window.statusBarColor = base
         window.navigationBarColor = base
         if(prefs.getBoolean("awake",true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -97,12 +99,13 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         handler.removeCallbacks(tick)
         map?.onDetach()
+        styledMap?.dispose()
         super.onDestroy()
     }
-    override fun onPause() { map?.onPause(); super.onPause() }
-    override fun onResume() { super.onResume(); map?.onResume() }
+    override fun onPause() { map?.onPause(); styledMap?.pause(); super.onPause() }
+    override fun onResume() { super.onResume(); map?.onResume(); styledMap?.resume() }
     private fun render(to: String) {
-        if((page == "Map" || page == "Home") && to != page) { map?.onPause(); map?.onDetach(); map=null }
+        if((page == "Map" || page == "Home") && to != page) { map?.onPause(); map?.onDetach(); map=null; styledMap?.dispose();styledMap=null }
         page = to
         val outer = col().apply { setBackgroundColor(base) }
         setContentView(outer)
@@ -310,9 +313,9 @@ class MainActivity : Activity() {
                 return
             } catch(_:Exception) {}
         }
-        val activeMap=createMap()
-        stage.addView(activeMap,FrameLayout.LayoutParams(-1,-1))
-        displaySavedRoute(activeMap)
+        val vectorMap=StyledMapPanel(this,prefs.getString("route_points","[]")?:"[]")
+        styledMap=vectorMap
+        stage.addView(vectorMap,FrameLayout.LayoutParams(-1,-1))
     }
     private fun chooseBackdrop() {
         AlertDialog.Builder(this).setTitle("Cockpit background")
@@ -537,9 +540,9 @@ class MainActivity : Activity() {
         }
         panel.addView(calculate,lp(-1,dp(39)))
         panel.addView(status)
-        val m=createMap()
-        body.addView(m,LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(8)})
-        displaySavedRoute(m)
+        val vectorMap=StyledMapPanel(this,prefs.getString("route_points","[]")?:"[]")
+        styledMap=vectorMap
+        body.addView(vectorMap,LinearLayout.LayoutParams(0,-1,1f).apply{leftMargin=dp(8)})
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
@@ -706,7 +709,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.13  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.14  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
