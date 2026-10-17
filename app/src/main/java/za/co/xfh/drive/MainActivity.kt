@@ -359,7 +359,11 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode,resultCode,data)
         if(resultCode!=RESULT_OK)return
         val uri=data?.data?:return
-        if(requestCode==442) {
+        if(requestCode==524){
+            try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
+            prefs.edit().putString("media_folder",uri.toString()).apply()
+            if(page=="Media")render("Media")
+        } else if(requestCode==442) {
             try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
             prefs.edit().putString("backdrop",uri.toString()).apply()
             render("Home")
@@ -403,16 +407,6 @@ class MainActivity : Activity() {
         }
         target.addView(centre,LinearLayout.LayoutParams(-1,-1))
     }
-    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
-        super.onActivityResult(requestCode,resultCode,data)
-        if(requestCode==524 && resultCode==Activity.RESULT_OK){
-            val uri=data?.data?:return
-            try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
-            prefs.edit().putString("media_folder",uri.toString()).apply()
-            if(page=="Media")render("Media")
-        }
-    }
-
     private fun findAddressSuggestions(field:EditText) {
         val query=field.text.toString().trim()
         if(query.length<3){Toast.makeText(this,"Enter at least 3 characters",Toast.LENGTH_SHORT).show();return}
