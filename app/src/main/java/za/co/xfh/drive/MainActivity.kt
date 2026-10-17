@@ -164,11 +164,11 @@ class MainActivity : Activity() {
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
         top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
-        if(to!="Map" && to!="Media") outer.addView(top)
+        if(to!="Map" && to!="Media" && to!="Apps") outer.addView(top)
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
-        if(to == "Map" || to == "Media") {
+        if(to == "Map" || to == "Media" || to == "Apps") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
-            if(to=="Map")showMap(content) else showMedia(content)
+            when(to){"Map"->showMap(content);"Media"->showMedia(content);"Apps"->showApps(content)}
         } else {
             val scroller = ScrollView(this).apply { isFillViewport=true }
             scroller.addView(content)
@@ -296,7 +296,17 @@ class MainActivity : Activity() {
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
-    private val widgetNames=listOf("Music","Radio","Podcasts","Weather","Clock","Now Playing")
+    private val widgetLibrary=listOf("Music","Radio","Podcasts","Weather","Clock","Now Playing")
+    private val widgetNames:List<String>
+        get(){
+            val saved=prefs.getString("widget_order","")?: ""
+            val parsed=saved.split("|").filter{it in widgetLibrary}.distinct()
+            return (parsed+widgetLibrary.filter{it !in parsed}).take(6)
+        }
+    private fun saveWidgetOrder(items:List<String>){
+        prefs.edit().putString("widget_order",items.joinToString("|")).apply()
+        widgetIndex=0
+    }
     private fun centered(value:String,size:Float,color:Int=bright,bold:Boolean=false)=txt(value,size,color,bold).apply{
         gravity=Gravity.CENTER;maxLines=2
     }
@@ -827,19 +837,80 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(req,permissions,grantResults)
         if(req==100 && grantResults.any{it==PackageManager.PERMISSION_GRANTED})enableLocation()
     }
-    private fun showApps(target:LinearLayout) {
-        target.addView(txt("APPLICATIONS  •  External shortcuts",19f,blue,true))
-        target.addView(txt("External apps may not stay landscape. Use the built-in Media and Map pages where possible.",12f,dim))
-        val installed=packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
-            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
-        installed.forEach { info->
-            val label=info.loadLabel(packageManager).toString()
-            target.addView(action("↗  $label"){
-                open(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                    .setClassName(info.activityInfo.packageName,info.activityInfo.name))
-            },lp(-1,dp(49)))
-            target.addView(space(h=dp(4)))
+    private fun showApps(target:LinearLayout){
+        target.setPadding(dp(14),dp(6),dp(14),dp(8))
+        val heading=row()
+        heading.addView(txt("WIDGET MANAGER",19f,blue,true),LinearLayout.LayoutParams(0,dp(43),1f))
+        heading.addView(txt("6 / 6 ACTIVE",11f,mint,true))
+        target.addView(heading)
+        target.addView(txt("Hold a widget and drag it onto another to change their Home positions.",12f,dim),
+            lp(-1,dp(31)))
+        val widgets=widgetNames.toMutableList()
+        val grid=col()
+        fun drawGrid(){
+            grid.removeAllViews()
+            for(r in 0 until 2){
+                val line=row()
+                for(c in 0 until 3){
+                    val index=r*3+c
+                    val name=widgets[index]
+                    val surface=col().apply{
+                        background=bg(glass2,10)
+                        setPadding(dp(12),dp(9),dp(12),dp(8))
+                        gravity=Gravity.CENTER
+                        tag=index
+                        addView(centered(when(name){
+                            "Music"->"♫";"Radio"->"◉";"Podcasts"->"◎"
+                            "Weather"->"☁";"Clock"->"◷";else->"▶"
+                        },30f,blue),lp(-1,dp(51)))
+                        addView(centered(name.uppercase(),13f,bright,true),lp(-1,dp(30)))
+                        addView(centered("POSITION "+(index+1),10f,dim),lp(-1,dp(22)))
+                        setOnLongClickListener{
+                            val clip=android.content.ClipData.newPlainText("widget-position",index.toString())
+                            startDragAndDrop(clip,android.view.View.DragShadowBuilder(this),index,0)
+                            true
+                        }
+                        setOnDragListener{_,event->
+                            when(event.action){
+                                android.view.DragEvent.ACTION_DRAG_STARTED->true
+                                android.view.DragEvent.ACTION_DRAG_ENTERED->{alpha=0.6f;true}
+                                android.view.DragEvent.ACTION_DRAG_EXITED->{alpha=1f;true}
+                                android.view.DragEvent.ACTION_DROP->{
+                                    alpha=1f
+                                    val from=event.localState as? Int
+                                    if(from!=null && from!=index && from in widgets.indices){
+                                        val moved=widgets.removeAt(from)
+                                        widgets.add(index,moved)
+                                        saveWidgetOrder(widgets)
+                                        drawGrid()
+                                    }
+                                    true
+                                }
+                                android.view.DragEvent.ACTION_DRAG_ENDED->{alpha=1f;true}
+                                else->true
+                            }
+                        }
+                    }
+                    line.addView(surface,LinearLayout.LayoutParams(0,-1,1f).apply{
+                        if(c>0)leftMargin=dp(9)
+                    })
+                }
+                grid.addView(line,LinearLayout.LayoutParams(-1,0,1f).apply{
+                    weight=1f
+                    if(r>0)topMargin=dp(9)
+                })
+            }
         }
+        drawGrid()
+        target.addView(grid,LinearLayout.LayoutParams(-1,0,1f))
+        val footer=row().apply{gravity=Gravity.CENTER_VERTICAL}
+        footer.addView(txt("WIDGET LIBRARY  •  6 AVAILABLE",11f,dim,true),
+            LinearLayout.LayoutParams(0,dp(40),1f))
+        footer.addView(action("RESET ORDER"){
+            saveWidgetOrder(widgetLibrary)
+            render("Apps")
+        },lp(dp(124),dp(36)))
+        target.addView(footer)
     }
     private fun showSettings(target:LinearLayout) {
         target.addView(txt("SETTINGS",22f,blue,true))
