@@ -33,13 +33,15 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private val blue=Color.rgb(88,171,250)
     private val bg=Color.rgb(23,23,29)
     private val panel=Color.rgb(32,32,40)
-    private var mode=prefs.getString("media_mode","FILES")?:"FILES"
+    private var mode=(prefs.getString("media_mode","MEDIA")?:"MEDIA").let{if(it=="FILES")"MEDIA" else it}
     private var filter=prefs.getString("media_filter","ALL")?:"ALL"
     private var currentFolder:DocumentFile?=null
     private var right:LinearLayout?=null
     private var list:LinearLayout?=null
     private var video:VideoView?=null
     private var activeRadio:MediaPlayer?=null
+    private val podcastEpisodes=mutableListOf<Pair<String,String>>()
+    private var podcastFeed=prefs.getString("podcast_feed","https://feeds.npr.org/510318/podcast.xml")?:"https://feeds.npr.org/510318/podcast.xml"
     private fun d(v:Int)=(v*resources.displayMetrics.density).toInt()
     private fun text(s:String,size:Float=12f,color:Int=ink,bold:Boolean=false)=TextView(activity).apply{
         text=s;textSize=size;setTextColor(color);gravity=Gravity.CENTER_VERTICAL
@@ -56,37 +58,40 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         removeAllViews()
         val bar=LinearLayout(activity).apply{orientation=HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         bar.addView(text("MEDIA",14f,blue,true),LayoutParams(d(75),d(38)))
-        for(item in listOf("FILES","RADIO")){
+        for(item in listOf("MEDIA","RADIO","PODCASTS")){
             val label=button(item){mode=item;prefs.edit().putString("media_mode",mode).apply();render()}
             if(mode==item)label.setTextColor(blue)
             bar.addView(label,LayoutParams(d(90),d(33)).apply{rightMargin=d(5)})
         }
-        bar.addView(text(if(mode=="RADIO")"STREAMING RADIO" else "LOCAL AUDIO + VIDEO",10f,muted),LayoutParams(0,d(32),1f))
+
         addView(bar,LayoutParams(-1,d(40)))
         val columns=LinearLayout(activity).apply{orientation=HORIZONTAL}
         val left=LinearLayout(activity).apply{orientation=VERTICAL;setBackgroundColor(Color.rgb(19,19,25))}
         val tabs=LinearLayout(activity).apply{orientation=HORIZONTAL}
-        if(mode=="FILES"){
+        if(mode=="MEDIA"){
             for(name in listOf("ALL","MUSIC","VIDEO")){
                 val b=button(name){filter=name;prefs.edit().putString("media_filter",name).apply();render()}
                 if(name==filter)b.setTextColor(blue)
                 tabs.addView(b,LayoutParams(0,d(31),1f).apply{rightMargin=d(2)})
             }
+        }else if(mode=="PODCASTS"){
+            tabs.addView(text("RSS EPISODES",11f,blue,true),LayoutParams(-1,d(31)))
         }else{
-            for(name in listOf("INTERNET","FM","AM")){
-                val b=button(name){filter=name;render()}
-                if(name==filter)b.setTextColor(blue)
-                tabs.addView(b,LayoutParams(0,d(31),1f).apply{rightMargin=d(2)})
-            }
+            tabs.addView(text("INTERNET RADIO",11f,blue,true),LayoutParams(-1,d(31)))
         }
         left.addView(tabs,LayoutParams(-1,d(32)))
         val controls=LinearLayout(activity).apply{orientation=HORIZONTAL}
-        controls.addView(button(if(mode=="FILES")"◀  UP" else "+ STATION"){
-            if(mode=="FILES"){currentFolder=currentFolder?.parentFile;populate()}else addStation()
-        },LayoutParams(0,d(29),1f))
-        controls.addView(button(if(mode=="FILES")"CHOOSE FOLDER" else "REFRESH"){
-            if(mode=="FILES")selectFolder()else populate()
-        },LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
+        if(mode=="PODCASTS"){
+            controls.addView(button("CHANGE FEED"){editPodcastFeed()},LayoutParams(0,d(29),1f))
+            controls.addView(button("REFRESH"){loadPodcasts()},LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
+        }else{
+            controls.addView(button(if(mode=="MEDIA")"◀  UP" else "+ STATION"){
+                if(mode=="MEDIA"){currentFolder=currentFolder?.parentFile;populate()}else addStation()
+            },LayoutParams(0,d(29),1f))
+            controls.addView(button(if(mode=="MEDIA")"CHOOSE FOLDER" else "REFRESH"){
+                if(mode=="MEDIA")selectFolder()else populate()
+            },LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
+        }
         left.addView(controls,LayoutParams(-1,d(30)))
         val scroll=ScrollView(activity).apply{isFillViewport=true}
         list=LinearLayout(activity).apply{orientation=VERTICAL}
@@ -102,6 +107,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         addView(columns,LayoutParams(-1,0,1f))
         populate()
         showDetails()
+        if(mode=="PODCASTS")loadPodcasts()
     }
     private fun item(title:String,subtitle:String,selected:Boolean=false,click:()->Unit){
         val container=LinearLayout(activity).apply{
@@ -120,19 +126,19 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     }
     private fun populate(){
         list?.removeAllViews()
+        if(mode=="PODCASTS"){
+            if(podcastEpisodes.isEmpty())item("Podcast episodes","Tap REFRESH to load an RSS feed"){}
+            for((title,url) in podcastEpisodes)item("♫  "+title,"PODCAST · stream episode",playingName==title){playStream(title,url,"Podcast")}
+            return
+        }
         if(mode=="RADIO"){
-            if(filter=="FM"||filter=="AM"){
-                item("Tuner not connected","AM/FM scanning requires compatible radio hardware"){}
-                item("Use INTERNET for now","Save and play streaming stations"){}
-            }else{
-                val stations=stations()
-                if(stations.length()==0)item("No stations saved","+ STATION to add a streaming radio URL"){}
-                for(i in 0 until stations.length()){
-                    val st=stations.optJSONObject(i)?:continue
-                    val title=st.optString("name","Station")
-                    val url=st.optString("url","")
-                    item(title,url,playingSource=="Radio"&&playingName==title){playStream(title,url)}
-                }
+            val saved=stations()
+            if(saved.length()==0)item("No stations saved","+ STATION to add a direct internet radio stream"){}
+            for(i in 0 until saved.length()){
+                val st=saved.optJSONObject(i)?:continue
+                val title=st.optString("name","Station")
+                val url=st.optString("url","")
+                item(title,url,playingSource=="Radio"&&playingName==title){playStream(title,url)}
             }
             return
         }
@@ -179,6 +185,54 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             populate()
         }catch(e:Exception){Toast.makeText(activity,"Cannot play file: "+e.message,Toast.LENGTH_LONG).show()}
     }
+    private fun editPodcastFeed(){
+        val input=EditText(activity).apply{setSingleLine(true);setText(podcastFeed);hint="Podcast RSS feed URL"}
+        AlertDialog.Builder(activity).setTitle("Podcast RSS feed").setView(input)
+            .setPositiveButton("LOAD"){_,_->
+                val value=input.text.toString().trim()
+                if(value.startsWith("https://")){podcastFeed=value;prefs.edit().putString("podcast_feed",value).apply();loadPodcasts()}
+                else Toast.makeText(activity,"Use an HTTPS RSS feed",Toast.LENGTH_SHORT).show()
+            }.setNegativeButton("CANCEL",null).show()
+    }
+    private fun loadPodcasts(){
+        if(mode!="PODCASTS")return
+        list?.removeAllViews()
+        item("Loading episodes…","Fetching podcast RSS feed"){}
+        Thread{
+            try{
+                val c=java.net.URL(podcastFeed).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=12000;c.readTimeout=15000
+                c.setRequestProperty("User-Agent","DriveXFH-Podcast/0.16")
+                val result=mutableListOf<Pair<String,String>>()
+                try{
+                    if(c.responseCode!=200)throw Exception("Feed HTTP "+c.responseCode)
+                    val xml=android.util.Xml.newPullParser()
+                    xml.setInput(c.inputStream,"UTF-8")
+                    var inItem=false;var currentTitle="";var audio=""
+                    var event=xml.eventType
+                    while(event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT && result.size<60){
+                        val tag=xml.name?:""
+                        if(event==org.xmlpull.v1.XmlPullParser.START_TAG){
+                            if(tag=="item"){inItem=true;currentTitle="";audio=""}
+                            else if(inItem && tag=="title")currentTitle=xml.nextText().trim()
+                            else if(inItem && tag=="enclosure")audio=xml.getAttributeValue(null,"url")?:""
+                        }else if(event==org.xmlpull.v1.XmlPullParser.END_TAG && tag=="item"){
+                            if(audio.startsWith("https://")||audio.startsWith("http://"))result.add((currentTitle.ifBlank{"Episode"}) to audio)
+                            inItem=false
+                        }
+                        event=xml.next()
+                    }
+                }finally{c.disconnect()}
+                activity.runOnUiThread{
+                    if(mode=="PODCASTS"){
+                        podcastEpisodes.clear();podcastEpisodes.addAll(result)
+                        populate()
+                        if(result.isEmpty())item("No audio episodes found","Try another RSS feed"){}
+                    }
+                }
+            }catch(e:Exception){activity.runOnUiThread{if(mode=="PODCASTS"){list?.removeAllViews();item("Feed could not load",e.message?:"Connection error"){} }}}
+        }.start()
+    }
     private fun stations()=try{org.json.JSONArray(prefs.getString("radio_stations","[]"))}catch(_:Exception){org.json.JSONArray()}
     private fun addStation(){
         val form=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(d(14),d(8),d(14),d(8))}
@@ -195,9 +249,9 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             }.setNegativeButton("CANCEL",null).show()
     }
     private fun releaseRadio(){try{activeRadio?.release()}catch(_:Exception){};activeRadio=null}
-    private fun playStream(name:String,url:String){
+    private fun playStream(name:String,url:String,source:String="Radio"){
         releaseRadio();stop()
-        playingName=name;playingArtist="Internet radio";playingSource="Radio";isPlaying=false
+        playingName=name;playingArtist=if(source=="Podcast")"Podcast episode" else "Internet radio";playingSource=source;isPlaying=false
         showDetails()
         val p=MediaPlayer();activeRadio=p
         try{
@@ -212,13 +266,24 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         area.removeAllViews()
         area.addView(text(playingName.ifEmpty{"Select music, video or radio"},15f,ink,true),LayoutParams(-1,d(32)))
         area.addView(text(playingArtist.ifEmpty{playingSource},11f,muted),LayoutParams(-1,d(26)))
-        val surface=FrameLayout(activity).apply{setBackgroundColor(bg)}
+        val surface=FrameLayout(activity).apply{setBackgroundColor(bg);clipChildren=true}
         if(playingSource=="Video"&&playingUri!=null){
             val v=VideoView(activity).apply{
-                setVideoURI(playingUri);setOnPreparedListener{it.isLooping=false;start()}
+                setVideoURI(playingUri);setOnPreparedListener{mp->
+                    val videoW=mp.videoWidth;val videoH=mp.videoHeight
+                    if(videoW>0&&videoH>0){
+                        val width=surface.width;val height=surface.height
+                        if(width>0&&height>0){
+                            val fit=kotlin.math.min(width.toFloat()/videoW,height.toFloat()/videoH)
+                            val layout=FrameLayout.LayoutParams((videoW*fit).toInt(),(videoH*fit).toInt(),Gravity.CENTER)
+                            this.layoutParams=layout
+                        }
+                    }
+                    mp.isLooping=false;start()
+                }
                 setOnCompletionListener{MediaCentre.isPlaying=false}
             }
-            video=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1))
+            video=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))
         }else{
             val art=ImageView(activity).apply{scaleType=ImageView.ScaleType.FIT_CENTER}
             if(playingSource=="Music"&&playingUri!=null)try{
@@ -228,7 +293,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 r.release()
             }catch(_:Exception){}
             surface.addView(art,FrameLayout.LayoutParams(-1,-1))
-            if(art.drawable==null)surface.addView(text(if(playingSource=="Radio")"◉ RADIO" else "♫",34f,blue,true).apply{gravity=Gravity.CENTER},FrameLayout.LayoutParams(-1,-1))
+            if(art.drawable==null)surface.addView(text(if(playingSource=="Radio")"◉ RADIO" else if(playingSource=="Podcast")"◉ PODCAST" else "♫",34f,blue,true).apply{gravity=Gravity.CENTER},FrameLayout.LayoutParams(-1,-1))
         }
         area.addView(surface,LayoutParams(-1,0,1f))
         val controls=LinearLayout(activity).apply{orientation=HORIZONTAL}
@@ -239,7 +304,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             if(playingSource=="Video"){
                 video?.let{if(it.isPlaying)it.pause() else it.start()}
             }else{
-                (if(playingSource=="Radio")activeRadio else player)?.let{
+                (if(playingSource=="Radio"||playingSource=="Podcast")activeRadio else player)?.let{
                     if(it.isPlaying){it.pause();isPlaying=false}else{it.start();isPlaying=true}
                 }
             }
