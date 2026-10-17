@@ -179,7 +179,8 @@ class MainActivity : Activity() {
                 }
             }
             val icon:View=dockArtwork(name,selected)
-            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER).apply { topMargin = dp(4) + if(name=="Apps") -dp(5) else 0 })
+            icon.translationY = -dp(2).toFloat()
+            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER).apply { if(name=="Apps") topMargin = -dp(5) })
             if(selected) {
                 val indicator=View(this).apply {
                     background=GradientDrawable().apply {
