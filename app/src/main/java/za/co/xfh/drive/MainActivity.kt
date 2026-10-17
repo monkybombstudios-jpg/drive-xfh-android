@@ -142,7 +142,7 @@ class MainActivity : Activity() {
     private fun dockArtwork(name:String,selected:Boolean):View {
         if(name=="Phone") return ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_call)
-            rotation = 180f
+            rotation = 90f
             setColorFilter(if(selected)blue else bright)
             scaleType=ImageView.ScaleType.FIT_CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2))
@@ -179,7 +179,7 @@ class MainActivity : Activity() {
                 }
             }
             val icon:View=dockArtwork(name,selected)
-            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER).apply { if(name=="Apps") topMargin = -dp(5) })
+            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER).apply { topMargin = dp(4) + if(name=="Apps") -dp(5) else 0 })
             if(selected) {
                 val indicator=View(this).apply {
                     background=GradientDrawable().apply {
@@ -238,7 +238,7 @@ class MainActivity : Activity() {
             setMargins(dp(12),dp(9),0,dp(59))
         })
         drawWidgets()
-        stage.addView(createDock("Home"),FrameLayout.LayoutParams(-1,dp(50),Gravity.BOTTOM))
+        stage.addView(createDock("Home"),FrameLayout.LayoutParams(-1,dp(46),Gravity.BOTTOM))
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
