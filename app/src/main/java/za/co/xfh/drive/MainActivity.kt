@@ -515,6 +515,17 @@ class MainActivity : Activity() {
             val formatted=if(distance>=1000.0)String.format(Locale.US,"%.1f km",distance/1000.0)
                           else String.format(Locale.US,"%.0f m",distance)
             guidance.text=(if(preview)"PREVIEW · " else "")+formatted+"  •  "+caption
+            if(location!=null && location.hasAccuracy() && location.accuracy<50f){
+                if(nearest.second<80.0){
+                    prefs.edit().putBoolean("nav_engaged",true).apply();offRouteCount=0
+                    val phase=when{distance<55.0->"turn";distance<180.0->"near";distance<500.0->"far";else->""}
+                    val key=(next?.first?:-1).toString()+":"+phase
+                    if(phase.isNotEmpty() && key!=lastSpoken){lastSpoken=key;speak(if(phase=="turn")caption+" now" else "In "+formatted+", "+caption)}
+                }else if(nearest.second>180.0 && prefs.getBoolean("nav_engaged",false) && prefs.getBoolean("nav_reroute",true)){
+                    offRouteCount++
+                    if(offRouteCount>=3 && !rerouteBusy && android.os.SystemClock.elapsedRealtime()-rerouteAt>45000L){offRouteCount=0;rerouteFrom(location)}
+                }
+            }
         }
         update(null)
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
@@ -523,12 +534,14 @@ class MainActivity : Activity() {
                 val last=lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
                     ?:lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
                 update(last)
-                lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER,3000L,8f,object:android.location.LocationListener{
+                val listener=object:android.location.LocationListener{
                     override fun onLocationChanged(location:android.location.Location){
                         if(page=="Home" && guidance.parent!=null)update(location)
                         else try{lm.removeUpdates(this)}catch(_:Exception){}
                     }
-                })
+                }
+                lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER,3000L,8f,listener)
+                turnListener=listener;turnManager=lm
             }catch(_:Exception){}
         }
     }
@@ -696,6 +709,7 @@ class MainActivity : Activity() {
                         .putString("route_start",start.latitude.toString()+","+start.longitude.toString())
                         .putString("route_destination_point",finish.latitude.toString()+","+finish.longitude.toString())
                         .putString("route_steps",instructions.toString())
+                        .putBoolean("nav_engaged",false)
                         .putString("backdrop","map").apply()
                     Toast.makeText(this,"Route ready: "+summary,Toast.LENGTH_LONG).show()
                     render("Home")
