@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.MotionEvent
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -44,9 +45,11 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var page = "Home"
     private var map: MapView? = null
+    private var widgetIndex=0
+    private var widgetHolder: LinearLayout?=null
     private val tick = object : Runnable {
         override fun run() {
-            if (page == "Home") render("Home")
+            if (page == "Home") refreshWidgetClock()
             handler.postDelayed(this, 60000)
         }
     }
@@ -98,14 +101,16 @@ class MainActivity : Activity() {
     override fun onPause() { map?.onPause(); super.onPause() }
     override fun onResume() { super.onResume(); map?.onResume() }
     private fun render(to: String) {
-        if(page == "Map" && to != "Map") { map?.onPause(); map?.onDetach(); map=null }
+        if((page == "Map" || page == "Home") && to != page) { map?.onPause(); map?.onDetach(); map=null }
         page = to
         val outer = col().apply { setBackgroundColor(base) }
         setContentView(outer)
         val top = row().apply { setPadding(dp(18),dp(8),dp(14),dp(6)) }
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
+        top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
         outer.addView(top)
+        if(to=="Home") { showCockpit(outer); return }
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
         if(to == "Map") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
@@ -122,36 +127,106 @@ class MainActivity : Activity() {
             }
         }
         val dock = row().apply { background = bg(Color.rgb(13,25,41),0); setPadding(dp(8),dp(3),dp(8),dp(3)) }
-        listOf("Home" to "⌂","Map" to "➤","Media" to "♫","Apps" to "▦","Settings" to "⚙").forEach { (name,icon)->
+        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "▦","Phone" to "☎").forEach { (name,icon)->
             val button = txt("$icon  $name",14f,if(to==name)blue else dim,true).apply {
-                gravity=Gravity.CENTER; setOnClickListener { if(page!=name) render(name) }
+                gravity=Gravity.CENTER; setOnClickListener { if(name=="Phone") open(Intent(Intent.ACTION_DIAL)) else if(page!=name) render(name) }
             }
             dock.addView(button,LinearLayout.LayoutParams(0,dp(42),1f))
         }
         outer.addView(dock)
     }
-    private fun showHome(target: LinearLayout) {
-        val feature = row()
-        val left = col().apply {
-            background=bg(glass2)
-            setPadding(dp(17),dp(13),dp(17),dp(13))
-            addView(txt("GOOD TO SEE YOU",11f,blue,true))
-            addView(txt(SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),39f,bright,true))
-            addView(txt(SimpleDateFormat("EEEE, d MMMM yyyy",Locale.getDefault()).format(Date()),14f,dim))
-            addView(txt("Your drive, your way.",12f,mint))
-        }
-        feature.addView(left,LinearLayout.LayoutParams(0,dp(165),1.12f).apply { setMargins(dp(3),0,dp(5),0) })
-        feature.addView(card("NOW PLAYING",nowTitle(),"♫",blue){render("Media")},LinearLayout.LayoutParams(0,dp(165),1f).apply {setMargins(dp(5),0,dp(3),0)})
-        target.addView(feature)
-        target.addView(txt("QUICK ACCESS",12f,dim,true))
-        val actions=row()
-        listOf(Triple("NAVIGATION","➤",blue),Triple("MEDIA","♫",mint),Triple("PHONE","☎",amber),Triple("APPS","▦",blue)).forEach { (name,icon,accent)->
-            val tile=card(name,"$icon  Open",icon,accent){
-                when(name){ "NAVIGATION"->render("Map");"MEDIA"->render("Media");"PHONE"->open(Intent(Intent.ACTION_DIAL)); else->render("Apps") }
+
+    private fun showCockpit(outer: LinearLayout) {
+        val stage=FrameLayout(this)
+        outer.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
+        val m=createMap()
+        stage.addView(m,FrameLayout.LayoutParams(-1,-1))
+        val holder=col().apply {
+            setPadding(dp(7),dp(7),dp(7),dp(7))
+            background=GradientDrawable().apply {
+                setColor(Color.argb(235,12,25,45))
+                cornerRadius=dp(8).toFloat()
+                setStroke(dp(1),Color.rgb(59,81,109))
             }
-            actions.addView(tile,LinearLayout.LayoutParams(0,dp(126),1f).apply {setMargins(dp(3),dp(4),dp(3),0)})
         }
-        target.addView(actions)
+        widgetHolder=holder
+        stage.addView(holder,FrameLayout.LayoutParams(dp(250),-2,Gravity.TOP or Gravity.LEFT).apply {
+            setMargins(dp(12),dp(9),0,0)
+        })
+        drawWidgets()
+        val dock=row().apply {
+            setPadding(dp(6),dp(2),dp(6),dp(2))
+            setBackgroundColor(Color.rgb(12,22,39))
+        }
+        listOf("Media" to "♫","Map" to "➤","Home" to "⌂","Apps" to "▦","Phone" to "☎").forEach { (name,symbol)->
+            val item=col().apply {
+                gravity=Gravity.CENTER
+                addView(txt(symbol,21f,if(name=="Home")blue else bright,true).apply {gravity=Gravity.CENTER})
+                addView(txt(name.uppercase(),10f,if(name=="Home")blue else dim).apply {gravity=Gravity.CENTER})
+                setOnClickListener {
+                    if(name=="Phone") open(Intent(Intent.ACTION_DIAL)) else render(name)
+                }
+            }
+            dock.addView(item,LinearLayout.LayoutParams(0,dp(51),1f))
+        }
+        stage.addView(dock,FrameLayout.LayoutParams(-1,dp(55),Gravity.BOTTOM))
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
+        else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
+    }
+    private val widgetNames=listOf("Weather","Clock","Now Playing","Shortcuts")
+    private fun widgetCard(heading:String,body:String,large:Boolean=false)=col().apply {
+        setPadding(dp(9),dp(5),dp(8),dp(5))
+        background=bg(glass2,6)
+        addView(txt(heading,10f,blue,true))
+        addView(txt(body,if(large)29f else 14f,bright,large))
+    }
+    private fun refreshWidgetClock() { if(page=="Home") drawWidgets() }
+    private fun drawWidgets() {
+        val holder=widgetHolder?:return
+        holder.removeAllViews()
+        repeat(2) { pos->
+            val name=widgetNames[(widgetIndex+pos)%widgetNames.size]
+            val tile=when(name) {
+                "Weather"->widgetCard("WEATHER","Local weather\nNot configured")
+                "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
+                    SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
+                "Now Playing"->widgetCard("NOW PLAYING",nowTitle()).apply{setOnClickListener{render("Media")}}
+                else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
+            }
+            holder.addView(tile,LinearLayout.LayoutParams(-1,dp(83)).apply {if(pos>0)topMargin=dp(5)})
+        }
+        val controls=row().apply {gravity=Gravity.CENTER}
+        val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+3)%4;drawWidgets()}}
+        val down=txt("▼",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+1)%4;drawWidgets()}}
+        controls.addView(up,LinearLayout.LayoutParams(dp(40),dp(28)))
+        controls.addView(txt("WIDGETS  ${widgetIndex+1}/4",10f,dim).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(28),1f))
+        controls.addView(down,LinearLayout.LayoutParams(dp(40),dp(28)))
+        holder.addView(controls)
+        var startY=0f
+        holder.setOnTouchListener { _,e->
+            when(e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {startY=e.y;true}
+                MotionEvent.ACTION_UP -> {
+                    val dy=e.y-startY
+                    if(kotlin.math.abs(dy)>dp(25)) {
+                        widgetIndex=(widgetIndex+if(dy<0)1 else 3)%4
+                        drawWidgets()
+                    }
+                    true
+                }
+                else->true
+            }
+        }
+    }
+    private fun createMap(): MapView {
+        val m=MapView(this).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            controller.setZoom(13.0)
+            controller.setCenter(GeoPoint(-32.98,27.87))
+        }
+        map=m
+        return m
     }
     private fun controller(): MediaController? {
         return try {
@@ -204,13 +279,7 @@ class MainActivity : Activity() {
         head.addView(txt("NAVIGATION  •  OpenStreetMap",17f,bright,true),LinearLayout.LayoutParams(0,dp(39),1f))
         head.addView(action("⌖  MY LOCATION"){moveToUser()})
         target.addView(head)
-        val m=MapView(this).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            controller.setZoom(13.0)
-            controller.setCenter(GeoPoint(-32.98,27.87))
-        }
-        map=m
+        val m=createMap()
         target.addView(m,LinearLayout.LayoutParams(-1,0,1f))
         target.addView(txt("Map tiles require data. Pan and pinch to zoom. Route guidance is planned for a later release.",11f,dim))
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
@@ -272,7 +341,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.2  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.3  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
