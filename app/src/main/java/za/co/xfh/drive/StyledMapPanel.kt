@@ -7,6 +7,10 @@ import android.location.LocationManager
 import android.content.pm.PackageManager
 import android.Manifest
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.view.Gravity
+import android.graphics.drawable.GradientDrawable
 import org.json.JSONArray
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
@@ -27,6 +31,7 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
     private val view=MapView(context)
     private var scene:MapLibreMap?=null
     private val points=mutableListOf<LatLng>()
+    private fun px(n:Int)=(n*resources.displayMetrics.density).toInt()
     init {
         addView(view,LayoutParams(-1,-1))
         try {
@@ -36,6 +41,23 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                 points.add(LatLng(p.getDouble(0),p.getDouble(1)))
             }
         }catch(_:Exception){}
+        val controls=LinearLayout(context).apply {orientation=LinearLayout.VERTICAL}
+        for((label,delta) in listOf("+" to 1.0,"−" to -1.0)) {
+            val btn=TextView(context).apply {
+                text=label;textSize=23f;setTextColor(Color.WHITE);gravity=Gravity.CENTER
+                background=GradientDrawable().apply{
+                    setColor(Color.argb(220,27,27,30));cornerRadius=px(7).toFloat()
+                }
+                setOnClickListener{
+                    scene?.let{m->m.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomTo(
+                        (m.cameraPosition.zoom+delta).coerceIn(2.0,20.0)))}
+                }
+            }
+            controls.addView(btn,LinearLayout.LayoutParams(px(43),px(43)).apply{bottomMargin=px(5)})
+        }
+        addView(controls,LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{
+            rightMargin=px(11);bottomMargin=px(58)
+        })
         view.onCreate(null)
         view.getMapAsync { map ->
             scene=map
@@ -69,14 +91,14 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                     map.addMarker(MarkerOptions().position(points.last()).title("Destination"))
                 }
                 val here=findLocation()
-                val centre=here ?: points.firstOrNull() ?: LatLng(-32.98,27.87)
+                val centre=points.firstOrNull() ?: here ?: LatLng(-32.98,27.87)
                 // Initial 2D overview for long journeys; use 3D close up near the vehicle.
-                val near=here!=null || points.size<2
-                val zoom=if(near)16.0 else 8.0
-                val tilt=if(near)58.0 else 45.0
+                val zoom=18.0
+                val tilt=58.0
                 map.cameraPosition=CameraPosition.Builder()
                     .target(centre).zoom(zoom).tilt(tilt).build()
-                if(here!=null) {
+                val arrowPosition=points.firstOrNull() ?: here
+                if(arrowPosition!=null) {
                     val arrow=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888)
                     val canvas=android.graphics.Canvas(arrow)
                     val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{
@@ -89,7 +111,7 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                     }
                     canvas.drawPath(shape,paint)
                     val icon=org.maplibre.android.annotations.IconFactory.getInstance(context).fromBitmap(arrow)
-                    map.addMarker(MarkerOptions().position(here).title("Current position").icon(icon))
+                    map.addMarker(MarkerOptions().position(arrowPosition).title(if(points.isNotEmpty())"Trip starting point" else "Current position").icon(icon))
                 }
             }
         }
