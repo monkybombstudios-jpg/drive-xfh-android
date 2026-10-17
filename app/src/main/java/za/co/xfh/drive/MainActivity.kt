@@ -132,6 +132,29 @@ class MainActivity : Activity() {
 
 
     // Shared dock keeps identical iconography and interaction on every page.
+    // Exact user-provided dock artwork, scaled to transparent 48px icon masks.
+    private val dockIconImages = mapOf(
+        "Map" to "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAEgElEQVR42u2Z34tVVRTHP+fcexuCicw0J6cywvQh6CGVDCJpeggpEqEICgqCYfzxUA8iaQ1B/QMS9AMfgiCKxIciqIQCESMhCbJAm9L8NTUi0oMN08zcud8eWpsWm3PunHPnXE24Gzbn3L3XWWt911577bX2TSRxLbeUa7z1APQA9AD0APQALKjVu8Q3cR0gnJat/zOA1HrLutrIFDBXiaUqSCUSU9wr1A8sBxYDDeAvYAL4I2OVWlcTQM0pfhuwGdgIrAFuiWhngOPAV8B+4EgGjysKIAgeAHYCLwA32tzfwG9m8TlgEbAiAvUF8AbwbcZeKd4kddJr9nxK0nn922YlfSBpk6RbJSXRNzdIWifpdUln7JuW/cbok7K6dKJ83Z6v6L/2saR7MmhT67FiiySNSpqx7/dJauTQVgogKL/LBDclbYtWpuasmUTWTR0PJD3oVuMjxyPpBoDgNptN4Iy5UACWZnyT5KxKYhZH0ipJp43naCSrMgBB6DJJEyZsu81dV8IIMcgA4n5Jk2aU+8qAKGv9Pab8J5ECZXjcGykXeOw03l/ngO0YQGA0KOmypClb9qTEUge/f1HSZ+7bxL33STphIB4qugppiYTvaTthPwXGotM3yTidQ2sATeA5YA/wi8X71MX+BJgG3rSx4SrPgbACB806j5vV6vNsVr9Rh13c3+5cx0cn7PyYknRRUn8b3oVdKHx8s7nPpKSlGYyzDqF6pHyI+U+4+SQDxCGjW1/EjdKC7rPC3GcMuBgd+1lpQHCbYWCvuVrgNe7ofQ/zP9jv1Tnu2VFBs8Se510elKd8HZgFRkx5DEANmAIuzFMbjBvfgSorsj57Tuds1NjyI8C7NnYCeNXeL7gVzGvTkcxKAEy5PN9bXO49WH6LU/534FHgkrPutIHPyzxDRjtZBYAgZMLthZoLfYlTvglsBd6xsZPAI8BZYK0DlCXXA1ppz3NVAjhtS78SuCPD55vANuBtG/seeNjcJwEGbfxMG7ktc8EH7PdPReroIgBqVhJ+Y8oOuY1cc5Z/y8a/NJpzrua+3RkiLim9HuuBu6xyGytUcpZIA561+HzE4nafjY+4umCvi9t1l/uHBHBTdAbEMvYb3e5ofEG5UDho+iWdNQFP2txWp/yoo08dkLutWpOktRkAgpJDVl/8KWkgOtwWnI0GIVtMkWOSdtj7pKRnMoqRAGCD0V22hNCn54FmsaQxo9vRjXQ6cdXWIWf1n63OzVrukAc9b7SnJF3vAIT5PkkHjOag8SlcldFBMTIo6TtJ75nl8nw1KPiaKXfYjQf6JU75k5KWF3Wd0MvczLUsKowD66JI1mwTgu+McqBZe2609HoV8CvwmJ0TaZnLrrKXu4pCX7sw13KHn4/rQ8A+4HNT/gCwwcJmrfRNXYf3QkXT8Iak4xaFDks66vbPhKSX2tTLhXrSpb9ZQ2qwzKUhoR0DPgTet7nOb+UqutxtB6IBvAzcZC50FPjRucmC7kW7DWC+a/25Tq1+pQHUo42tKhS/2ivQ+4+sB6AHoKL2D+f9gX7TSvNCAAAAAElFTkSuQmCC",
+        "Home" to "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACX0lEQVR42u2ZsYoUQRCGv56Zg0PRRFwMTAzk0Fg0MTUQQU3uCXwBIxPfwNhHMDPwCRTuFYQ1EdHEQ830AnFvZn4Dq6EZZnd7d7pXR6ag6dmd7q7/r6ruqt51khizFIxcJgITgYnARCBKHFBZPzoCBSCgtr4YE4EKaIEZ8MT61r5PI5Jytcr6A0lz/ZG5pKud94NabvC3JX0x8D+tP5Z0KxWJ1MBdAOowAH3a6U8k3UtBIjX40p4fG9BWUm19G3yWpEbSIxtf2vy/RqAIADwzgLWBbHuafydJT3vW2CkBb/U9SS8M1GIFeN+aIKSed4yxMwIe/AVJrwPw7QZtYfNeStrvrJuVgN98VyS93RJ8l8SRGSOahNvyRlZYQroBvAIuA6cDE1QN7AHvgPvAh0BP0kzsF70LvDHwdYLsWpkRrgNHwE3TsxLjph5wVs/MgI/AGQNfJiw/vCe+AgfAD180pPCArybPmcWUoZ4qbd3zpkerqthtlTfrFk5Qfjfr4p8BcesiwbdLXO8ijBeloyKvrNobigzXLAQU8b6wo/A42PzOvHIRuGbPbujRtW0IrQLvY/gBMO8ZMwPe20YdRCKXB7zFf5knSiPkc0htZ36SK1/Oi3wZWFj2HGtxRRhq0BmuDcZoSZgxdCPn2AMxhJPljyKj9QeHR+4QyuWpnYRQ98eqvhywLs6XzScoIbIRWAD7kTXTshLj7Br9Mj1JCfgj8DNwB7hkIF0n2wKcAJ86FvXW/g48tISmnpgvTMe3IHsnuQ/8czIkkZURMd5knP9/eGD6g2MiMBGYCEwEJgKjlt+QV0gZTIInVwAAAABJRU5ErkJggg==",
+        "Apps" to "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAACD0lEQVR42u2YvW4UMRDHf/buQgJFuggkqKMoEqLKE9Gc8jY8QR4BypSUFLRQIEVKESo+CghCsLdDMytZlnft/dSd4pGs270dW/P3zH9mbCMi7LNY9lwygAwgA8gAMoAMIAPIADKADCADGC3lAN0CMBGdRodR/ZjUUwGYfT+RpXjAAAK8Ap7rrlnPG1ugAt4CH4BjYOPMDYXuX+A18LNHLy4iEhtGfz9JXC5U96WkyTPVtwl2BMcQDnzX3a8D8V2rB3477//aPfK8JeqBX8oXRu/+CBKXznNoLeuEXRkBUAXCdNE0ahJ0mgHzxDF6tAfmrgOmw9ApmzIbABkAwCQaKWukUTdVtiP0zToh1CiRTQcHpGOdRQEcKXmLnnUeOiSvEtazawK4Aq41PRZe5mh0rc/6/gN4owa6HhDn/Y+TdnMrkSJPgEPd7a7c/lULVAU87eFAy5fbqVxI8UBrxDvgvCOE2l5oA1wCZ8B7R8cGwu0OeAF88RLAYh54BBwADwLk2wYq9eOEoje5kA1NoxJJoxI4FzQdIbR6GjXeCH3rm+P/b73Ct3gvNLRax4ySOSryUr2QHQF4J3ohCXSaUzvcWQH0ZQ1JMEgCYzUSl95BJXRjYTyS9nWm5RweGNJKnGgtkA6CWuAG+Kb14tTzjHgAa+Dj1KuVe9UL2cjx0HjVtUjgQ7NmCO2k5MvdDOC+A/gPUek3lHwP5VwAAAAASUVORK5CYII=",
+        "Media" to "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAADEUlEQVR42u2Yv2sUQRTHP7N7UaKNv+KvRhAkAUFNCptoxEbBQitLO9HaSqz8L6zU2kpLEaxiEwVBRFASTCVEUEEFyY/78bXwDQzj3t3u3WY3gXvwmON2Zvb7fe/Nm/fWSWI7S8I2lxGBEYERgRGBeqWxRXA4M6YDBLRzL6zpIgsBtw30YBtVRKAf4EPANDAHLAOPbY7qCqEQcMc0DIuDBvgCMAucAvYEzxeBeSDtF05lEkh7AJ4AzgDnzMqngb3R+jbQBMaMYOWHOAS8zwDPmYWngf0Z8zuBtxLDkwKtqgj4rJEY2DngvFl4og9gP/qsk9aRRj2BB8DtnIB9eDUy7qGOjaqCgAsAXrLfTbNkL8ChpZeBd8ALYAa4VfSCbZSUcdaCGO4F+DPwBngFLAAfbS3AHdurMg9klSTOsogHsWSA54HXwCdgPVq70wiPB/+pag94y60BTw3wggFu9ki3/gC3ItCuSgJh7bIC3MgBuNs+tRVzLhjHzerKuNCKGKW2atSHhBumSKu6H1CJXix0BpKSD3HltXnZHZkryYuVngENYXlnWUqDhlDZ90ARz/vmxl9sG1slC+UB74u2A8CUkTkWeMJVTUAFwR8H7gNXjISXVlFMjSHi1pe/SUHw01Z9TgR7KNpn00LIg2hFNXynwPseGfh1K/zikNFmldMe/G7gOnAZOAr8AY70yR5+7ZS1mh1gRw8Pr5ZNwAOYNQtODngPKGqE4hIkAX4Db6MObaiLzPetk8BzGzcsjELtFbv+rCxamZ1m7OEboLvAt+B+6GMSqZ82bHyof7ImqRNpy54tSxqz+S7aJ7HxhKT3+l++SroZze2reULIl8MnzZJpFws74IuV0kmG+/2cJeAscNUyEsAHy0zfu6wdygOpjU/MUquS2oFuSGras2vRmixNcrwrt+aZlFg4zBj4bnKvgPudgW0E6oqCz0sgBDUr6aWkn5LWJa1IeibpYtHYLUuLfJ0OY/MwsAv4AfzKeF6ZFP28nmTk57CyZKsTiEvoYXqBUmTQarR24JvVUo4IjAhsN/kLPTMk4hCiZCMAAAAASUVORK5CYII="
+    )
+    private fun dockArtwork(name:String,selected:Boolean):View {
+        if(name=="Phone") return ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_call)
+            setColorFilter(if(selected)blue else bright)
+            scaleType=ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(2),dp(2),dp(2),dp(2))
+        }
+        val bytes=android.util.Base64.decode(dockIconImages[name],android.util.Base64.DEFAULT)
+        val bitmap=android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+        return ImageView(this).apply {
+            setImageBitmap(bitmap)
+            setColorFilter(if(selected)blue else bright,android.graphics.PorterDuff.Mode.SRC_IN)
+            scaleType=ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds=true
+        }
+    }
     private fun createDock(activePage:String):LinearLayout {
         val dock=row().apply {
             gravity=Gravity.CENTER
@@ -154,16 +177,7 @@ class MainActivity : Activity() {
                     else if(page!=name)render(name)
                 }
             }
-            val icon:View=if(name=="Phone") ImageView(this).apply {
-                setImageResource(android.R.drawable.ic_menu_call)
-                setColorFilter(if(selected) blue else bright)
-                scaleType=ImageView.ScaleType.FIT_CENTER
-                setPadding(dp(2),dp(2),dp(2),dp(2))
-            } else txt(symbol,24f,if(selected)blue else bright,true).apply {
-                gravity=Gravity.CENTER
-                includeFontPadding=false
-                setPadding(0,0,0,0)
-            }
+            val icon:View=dockArtwork(name,selected)
             item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER))
             if(selected) {
                 val indicator=View(this).apply {
@@ -462,7 +476,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.9  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.10  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
