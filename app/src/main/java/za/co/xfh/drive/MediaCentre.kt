@@ -29,6 +29,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         var videoPlayer:VideoView?=null
         var cover:android.graphics.Bitmap?=null
         var artworkUrl=""
+        var onChanged:(()->Unit)?=null
         var queue=mutableListOf<Pair<String,String>>()
         var queueIndex=0
         var queuePlay:((Int)->Unit)?=null
@@ -385,7 +386,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                     if(connection.responseCode!=200||connection.contentLength>2000000)throw Exception("No artwork")
                     BitmapFactory.decodeStream(connection.inputStream)
                 }finally{connection.disconnect()}
-                activity.runOnUiThread{if(playingName==name&&picture!=null){cover=picture;showDetails()}}
+                activity.runOnUiThread{if(playingName==name&&picture!=null){cover=picture;showDetails();onChanged?.invoke()}}
             }catch(_:Exception){}
         }.start()
     }
@@ -395,11 +396,11 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         cover=null
         playingName=name;playingArtist=if(source=="Podcast")"Podcast episode" else "Internet radio";playingSource=source;isPlaying=false
         loadCover(if(source=="Podcast")podcastCoverUrl else stationCovers[url]?:"",name)
-        showDetails()
+        showDetails();onChanged?.invoke()
         val p=MediaPlayer();activeRadio=p;streamPlayer=p
         try{
             p.setDataSource(url)
-            p.setOnPreparedListener{it.start();isPlaying=true;showDetails()}
+            p.setOnPreparedListener{it.start();isPlaying=true;showDetails();onChanged?.invoke()}
             p.setOnErrorListener{_,_,_->isPlaying=false;showDetails();true}
             p.prepareAsync()
         }catch(e:Exception){releaseRadio();Toast.makeText(activity,e.message?:"Stream unavailable",Toast.LENGTH_LONG).show()}
