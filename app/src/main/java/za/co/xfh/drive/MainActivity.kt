@@ -43,6 +43,17 @@ class MainActivity : Activity() {
     private val amber = Color.rgb(249, 193, 126)
     private val prefs by lazy { getSharedPreferences("drive_xfh", MODE_PRIVATE) }
     private val handler = Handler(Looper.getMainLooper())
+    private var tts:android.speech.tts.TextToSpeech?=null
+    private var ttsReady=false
+    private var lastSpoken=""
+    private var rerouteBusy=false
+    private var rerouteAt=0L
+    private var offRouteCount=0
+    private var turnListener:android.location.LocationListener?=null
+    private var turnManager:android.location.LocationManager?=null
+    private fun stopTurnListener(){turnListener?.let{try{turnManager?.removeUpdates(it)}catch(_:Exception){}};turnListener=null;turnManager=null}
+    private fun speak(message:String){if(ttsReady && prefs.getBoolean("nav_voice",true))tts?.speak(message,android.speech.tts.TextToSpeech.QUEUE_FLUSH,null,"xfh-turn")}
+
     private var page = "Home"
     private var map: MapView? = null
     private var styledMap: StyledMapPanel? = null
@@ -90,6 +101,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = packageName
         org.maplibre.android.MapLibre.getInstance(this)
+        tts=android.speech.tts.TextToSpeech(this){n->ttsReady=n==android.speech.tts.TextToSpeech.SUCCESS;if(ttsReady)tts?.language=Locale.UK}
         window.statusBarColor = base
         window.navigationBarColor = base
         if(prefs.getBoolean("awake",true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -98,6 +110,8 @@ class MainActivity : Activity() {
     }
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        stopTurnListener()
+        tts?.stop();tts?.shutdown()
         map?.onDetach()
         styledMap?.dispose()
         super.onDestroy()
@@ -105,6 +119,7 @@ class MainActivity : Activity() {
     override fun onPause() { map?.onPause(); styledMap?.pause(); super.onPause() }
     override fun onResume() { super.onResume(); map?.onResume(); styledMap?.resume() }
     private fun render(to: String) {
+        stopTurnListener()
         if((page == "Map" || page == "Home") && to != page) { map?.onPause(); map?.onDetach(); map=null; styledMap?.dispose();styledMap=null }
         page = to
         val outer = col().apply { setBackgroundColor(base) }
