@@ -225,6 +225,68 @@ class MainActivity : Activity() {
             }
         }
     }
+
+    private fun batteryStatus():String {
+        val b=(getSystemService(BATTERY_SERVICE) as android.os.BatteryManager).getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val gps=if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)"GPS" else "GPS?"
+        return "⌖ $gps    Bluetooth    ▰ $b%"
+    }
+    private fun showBackdrop(stage:FrameLayout) {
+        val selected=prefs.getString("backdrop","map")
+        if(selected!="map" && selected!=null) {
+            try {
+                stage.addView(ImageView(this).apply {
+                    setImageURI(Uri.parse(selected));scaleType=ImageView.ScaleType.CENTER_CROP
+                },FrameLayout.LayoutParams(-1,-1))
+                return
+            } catch(_:Exception) {}
+        }
+        stage.addView(createMap(),FrameLayout.LayoutParams(-1,-1))
+    }
+    private fun chooseBackdrop() {
+        AlertDialog.Builder(this).setTitle("Cockpit background")
+            .setItems(arrayOf("Live map","Choose photo")) { _,which ->
+                if(which==0) {prefs.edit().putString("backdrop","map").apply();render("Home")}
+                else try {
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply{
+                        addCategory(Intent.CATEGORY_OPENABLE);type="image/*"
+                    },442)
+                }catch(_:Exception){Toast.makeText(this,"No image picker",Toast.LENGTH_SHORT).show()}
+            }.show()
+    }
+    private fun expandWidget(name:String) {
+        when(name) {
+            "Mirror" -> launchPackage("com.mirroring.suit")
+            "Video" -> try {startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE);type="video/*"
+            },443)}catch(_:Exception){Toast.makeText(this,"No video picker",Toast.LENGTH_SHORT).show()}
+            "Radio","Now Playing" -> render("Media")
+            "Clock","Weather" -> AlertDialog.Builder(this).setTitle(name)
+                .setMessage(if(name=="Clock")SimpleDateFormat("HH:mm, EEEE d MMMM yyyy",Locale.getDefault()).format(Date()) else "Weather integration coming soon.")
+                .setPositiveButton("Close",null).show()
+        }
+    }
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+        super.onActivityResult(requestCode,resultCode,data)
+        if(resultCode!=RESULT_OK)return
+        val uri=data?.data?:return
+        if(requestCode==442) {
+            try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
+            prefs.edit().putString("backdrop",uri.toString()).apply()
+            render("Home")
+        } else if(requestCode==443) {
+            val stage=stageView?:return
+            val overlay=FrameLayout(this).apply{setBackgroundColor(Color.BLACK)}
+            stage.addView(overlay,FrameLayout.LayoutParams(-1,-1))
+            val video=VideoView(this)
+            overlay.addView(video,FrameLayout.LayoutParams(-1,-1))
+            video.setMediaController(android.widget.MediaController(this).apply{setAnchorView(video)})
+            overlay.addView(action("✕ CLOSE"){video.stopPlayback();stage.removeView(overlay)},
+                FrameLayout.LayoutParams(-2,dp(44),Gravity.TOP or Gravity.RIGHT))
+            video.setVideoURI(uri)
+            video.start()
+        }
+    }
     private fun createMap(): MapView {
         val m=MapView(this).apply {
             setTileSource(TileSourceFactory.MAPNIK)
