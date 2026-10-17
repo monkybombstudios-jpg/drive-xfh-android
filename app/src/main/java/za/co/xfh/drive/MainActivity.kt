@@ -313,6 +313,37 @@ class MainActivity : Activity() {
                 "Now Playing"->widgetCard("NOW PLAYING",if(MediaCentre.playingName.isNotEmpty())MediaCentre.playingName else nowTitle()).apply{setOnClickListener{render("Media")}}
                 else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
             }
+            if(name=="Radio"||name=="Video"||name=="Now Playing"){
+                val active=when(name){
+                    "Radio"->MediaCentre.playingSource=="Radio"
+                    "Video"->MediaCentre.playingSource=="Video"
+                    else->MediaCentre.playingName.isNotBlank()
+                }
+                if(active){
+                    val controls=row().apply{gravity=Gravity.CENTER}
+                    for((label,step) in listOf("⏮" to -1,"⏯" to 0,"⏭" to 1)){
+                        controls.addView(txt(label,17f,bright,true).apply{
+                            gravity=Gravity.CENTER
+                            setOnClickListener{
+                                if(step==0)MediaCentre.toggle() else MediaCentre.skip(step)
+                                drawWidgets()
+                            }
+                        },LinearLayout.LayoutParams(0,dp(32),1f))
+                    }
+                    tile.addView(controls)
+                    if(name!="Radio" && MediaCentre.duration()>0){
+                        tile.addView(SeekBar(this).apply{
+                            max=100
+                            progress=(100L*MediaCentre.position()/MediaCentre.duration()).toInt().coerceIn(0,100)
+                            setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                                override fun onProgressChanged(bar:SeekBar?,value:Int,user:Boolean){if(user)MediaCentre.seek(value)}
+                                override fun onStartTrackingTouch(bar:SeekBar?){}
+                                override fun onStopTrackingTouch(bar:SeekBar?){}
+                            })
+                        },lp(-1,dp(24)))
+                    }
+                }
+            }
             tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
             if(name=="Mirror" || name=="Clock" || name=="Weather")tile.setOnClickListener{expandWidget(name)}
             holder.addView(tile,LinearLayout.LayoutParams(-1,0,1f).apply {if(pos>0)topMargin=dp(5)})
