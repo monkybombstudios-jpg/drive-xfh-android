@@ -216,7 +216,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         if(playingSource=="Video"&&playingUri!=null){
             val v=VideoView(activity).apply{
                 setVideoURI(playingUri);setOnPreparedListener{it.isLooping=false;start()}
-                setOnCompletionListener{isPlaying=false}
+                setOnCompletionListener{MediaCentre.isPlaying=false}
             }
             video=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1))
         }else{
