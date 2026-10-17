@@ -575,6 +575,18 @@ class MainActivity : Activity() {
             prefs.edit().putString("nav_draft",destination.text.toString()).apply()
             planRoute(fromHome.isChecked,home.text.toString().trim(),destination.text.toString().trim(),status,calculate)
         }
+        panel.addView(txt("ROUTE PREFERENCE",10f,blue,true))
+        val mode=Spinner(this).apply{
+            adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Fastest","Shortest available alternative"))
+            setSelection(if(prefs.getString("nav_mode","fastest")=="shortest")1 else 0)
+            onItemSelectedListener=object:android.widget.AdapterView.OnItemSelectedListener{
+                override fun onNothingSelected(parent:android.widget.AdapterView<*>?){}
+                override fun onItemSelected(parent:android.widget.AdapterView<*>?,view:View?,position:Int,id:Long){prefs.edit().putString("nav_mode",if(position==1)"shortest" else "fastest").apply()}
+            }
+        }
+        panel.addView(mode,lp(-1,dp(36)))
+        panel.addView(CheckBox(this).apply{text="Voice directions";textSize=11f;setTextColor(bright);isChecked=prefs.getBoolean("nav_voice",true);setOnCheckedChangeListener{_,b->prefs.edit().putBoolean("nav_voice",b).apply()}})
+        panel.addView(CheckBox(this).apply{text="Automatic rerouting";textSize=11f;setTextColor(bright);isChecked=prefs.getBoolean("nav_reroute",true);setOnCheckedChangeListener{_,b->prefs.edit().putBoolean("nav_reroute",b).apply()}})
         panel.addView(calculate,lp(-1,dp(39)))
         panel.addView(status)
         val vectorMap=StyledMapPanel(this,prefs.getString("route_points","[]")?:"[]")
@@ -641,7 +653,7 @@ class MainActivity : Activity() {
                 val finish=selectedCoordinates("nav_dest_point",dest)?:geocode(dest)
                 val url="https://router.project-osrm.org/route/v1/driving/"+
                     start.longitude+","+start.latitude+";"+finish.longitude+","+finish.latitude+
-                    "?overview=full&geometries=geojson&steps=true"
+                    "?overview=full&geometries=geojson&steps=true&alternatives=true"
                 val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 c.connectTimeout=15000;c.readTimeout=20000
                 c.setRequestProperty("User-Agent","DriveXFH/0.12 prototype")
@@ -651,7 +663,8 @@ class MainActivity : Activity() {
                 }finally{c.disconnect()}
                 val routes=payload.getJSONArray("routes")
                 if(routes.length()==0)throw Exception("No driving route found.")
-                val route=routes.getJSONObject(0)
+                var route=routes.getJSONObject(0)
+                if(prefs.getString("nav_mode","fastest")=="shortest")for(i in 1 until routes.length()){val r=routes.getJSONObject(i);if(r.getDouble("distance")<route.getDouble("distance"))route=r}
                 val coords=route.getJSONObject("geometry").getJSONArray("coordinates")
                 val arr=org.json.JSONArray()
                 for(i in 0 until coords.length()){
@@ -681,6 +694,7 @@ class MainActivity : Activity() {
                     prefs.edit().putString("route_points",arr.toString())
                         .putString("route_destination",dest).putString("route_summary",summary)
                         .putString("route_start",start.latitude.toString()+","+start.longitude.toString())
+                        .putString("route_destination_point",finish.latitude.toString()+","+finish.longitude.toString())
                         .putString("route_steps",instructions.toString())
                         .putString("backdrop","map").apply()
                     Toast.makeText(this,"Route ready: "+summary,Toast.LENGTH_LONG).show()
@@ -747,7 +761,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.14.3  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.15  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
