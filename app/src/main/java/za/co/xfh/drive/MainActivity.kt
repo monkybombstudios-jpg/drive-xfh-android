@@ -179,7 +179,7 @@ class MainActivity : Activity() {
                 }
             }
             val icon:View=dockArtwork(name,selected)
-            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER))
+            item.addView(icon,FrameLayout.LayoutParams(dp(30),dp(30),Gravity.CENTER).apply { if(name=="Apps") topMargin = -dp(5) })
             if(selected) {
                 val indicator=View(this).apply {
                     background=GradientDrawable().apply {
