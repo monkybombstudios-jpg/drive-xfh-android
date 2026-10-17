@@ -278,7 +278,7 @@ class MainActivity : Activity() {
             val tile=when(name) {
                 "Radio"->widgetCard("RADIO",if(MediaCentre.playingSource=="Radio")MediaCentre.playingName else "Choose a station").apply{setOnClickListener{prefs.edit().putString("media_mode","RADIO").apply();render("Media")}}
                 "Mirror"->widgetCard("MIRROR","Phone connection")
-                "Video"->widgetCard("VIDEO",if(MediaCentre.playingSource=="Video")MediaCentre.playingName else "Local video player").apply{setOnClickListener{prefs.edit().putString("media_mode","FILES").putString("media_filter","VIDEO").apply();render("Media")}}
+                "Video"->widgetCard("VIDEO",if(MediaCentre.playingSource=="Video")MediaCentre.playingName else "Local video player").apply{setOnClickListener{prefs.edit().putString("media_mode","MEDIA").putString("media_filter","VIDEO").apply();render("Media")}}
                 "Weather"->widgetCard("WEATHER","Local weather\nNot configured")
                 "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
                     SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
