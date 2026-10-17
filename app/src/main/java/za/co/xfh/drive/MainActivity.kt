@@ -58,6 +58,33 @@ class MainActivity : Activity() {
     private var map: MapView? = null
     private var styledMap: StyledMapPanel? = null
     private var widgetIndex=0
+    private var weatherText="Weather loading…"
+    private var weatherLast=0L
+    private fun refreshWeather(){
+        if(android.os.SystemClock.elapsedRealtime()-weatherLast<1800000L)return
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return
+        weatherLast=android.os.SystemClock.elapsedRealtime()
+        Thread{
+            try{
+                val manager=getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+                val loc=manager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                    ?:manager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)?:return@Thread
+                val url="https://api.open-meteo.com/v1/forecast?latitude="+loc.latitude+"&longitude="+loc.longitude+
+                    "&current=weather_code&daily=temperature_2m_min,temperature_2m_max&forecast_days=1&timezone=auto"
+                val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=10000;c.readTimeout=12000
+                val obj=try{org.json.JSONObject(c.inputStream.bufferedReader().use{it.readText()})}finally{c.disconnect()}
+                val code=obj.getJSONObject("current").getInt("weather_code")
+                val type=when(code){0->"☼ Sunny";1,2->"◐ Partly cloudy";3->"☁ Overcast";45,48->"≋ Fog";51,53,55,61,63,65,80,81,82->"☂ Rain";71,73,75,85,86->"❄ Snow";95,96,99->"ϟ Storm";else->"☁ Cloudy"}
+                val daily=obj.getJSONObject("daily")
+                val low=daily.getJSONArray("temperature_2m_min").getDouble(0).toInt()
+                val high=daily.getJSONArray("temperature_2m_max").getDouble(0).toInt()
+                val summary=type+" | "+low+"° to "+high+"°C | "+String.format(Locale.US,"%.2f, %.2f",loc.latitude,loc.longitude)
+                runOnUiThread{weatherText=summary;if(page=="Home")drawWidgets()}
+            }catch(_:Exception){runOnUiThread{weatherLast=0L;weatherText="Weather unavailable"}}
+        }.start()
+    }
+
     private var stageView:FrameLayout?=null
     private var widgetHolder: LinearLayout?=null
     private val tick = object : Runnable {
@@ -271,6 +298,7 @@ class MainActivity : Activity() {
     }
     private fun refreshWidgetClock() { if(page=="Home") drawWidgets() }
     private fun drawWidgets() {
+        refreshWeather()
         val holder=widgetHolder?:return
         holder.removeAllViews()
         repeat(2) { pos->
@@ -279,7 +307,7 @@ class MainActivity : Activity() {
                 "Radio"->widgetCard("RADIO",if(MediaCentre.playingSource=="Radio")MediaCentre.playingName else "Choose a station").apply{setOnClickListener{prefs.edit().putString("media_mode","RADIO").apply();render("Media")}}
                 "Mirror"->widgetCard("MIRROR","Phone connection")
                 "Video"->widgetCard("VIDEO",if(MediaCentre.playingSource=="Video")MediaCentre.playingName else "Local video player").apply{setOnClickListener{prefs.edit().putString("media_mode","MEDIA").putString("media_filter","VIDEO").apply();render("Media")}}
-                "Weather"->widgetCard("WEATHER","Local weather\nNot configured")
+                "Weather"->widgetCard("WEATHER",weatherText)
                 "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
                     SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
                 "Now Playing"->widgetCard("NOW PLAYING",if(MediaCentre.playingName.isNotEmpty())MediaCentre.playingName else nowTitle()).apply{setOnClickListener{render("Media")}}
