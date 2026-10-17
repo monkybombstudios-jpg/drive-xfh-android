@@ -80,7 +80,7 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                     val arrow=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888)
                     val canvas=android.graphics.Canvas(arrow)
                     val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{
-                        color=Color.rgb(35,140,244);style=android.graphics.Paint.Style.FILL
+                        color=Color.rgb(35,140,244);this.style=android.graphics.Paint.Style.FILL
                         setShadowLayer(5f,0f,3f,Color.DKGRAY)
                     }
                     val shape=android.graphics.Path().apply{
