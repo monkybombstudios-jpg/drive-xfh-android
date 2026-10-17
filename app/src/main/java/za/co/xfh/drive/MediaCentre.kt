@@ -360,7 +360,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 }else Toast.makeText(activity,"Enter a name and a direct HTTPS stream URL",Toast.LENGTH_LONG).show()
             }.setNegativeButton("CANCEL",null).show()
     }
-    private fun releaseRadio(){try{activeRadio?.release()}catch(_:Exception){};activeRadio=null;streamPlayer=null}
+    private fun releaseRadio(){try{streamPlayer?.release()}catch(_:Exception){};activeRadio=null;streamPlayer=null}
     private fun playStream(name:String,url:String,source:String="Radio"){
         releaseRadio();stop()
         queueIndex=queue.indexOfFirst{it.second==url}.coerceAtLeast(0)
@@ -409,6 +409,20 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             if(art.drawable==null)surface.addView(text(if(playingSource=="Radio")"◉ RADIO" else if(playingSource=="Podcast")"◉ PODCAST" else "♫",34f,blue,true).apply{gravity=Gravity.CENTER},FrameLayout.LayoutParams(-1,-1))
         }
         area.addView(surface,LayoutParams(-1,0,1f))
+        if(playingSource=="Music"||playingSource=="Video"||playingSource=="Podcast"){
+            val duration=MediaCentre.duration()
+            if(duration>0){
+                val progress=SeekBar(activity).apply{
+                    max=100;this.progress=(MediaCentre.position().toLong()*100/duration).toInt().coerceIn(0,100)
+                    setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                        override fun onProgressChanged(seekBar:SeekBar?,value:Int,fromUser:Boolean){if(fromUser)MediaCentre.seek(value)}
+                        override fun onStartTrackingTouch(seekBar:SeekBar?){}
+                        override fun onStopTrackingTouch(seekBar:SeekBar?){}
+                    })
+                }
+                area.addView(progress,LayoutParams(-1,d(29)))
+            }
+        }
         val controls=LinearLayout(activity).apply{orientation=HORIZONTAL}
         controls.addView(button("■ STOP"){
             stop();releaseRadio();playingSource="Music";playingName="";playingArtist="";showDetails()
