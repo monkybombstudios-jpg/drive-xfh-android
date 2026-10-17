@@ -130,11 +130,11 @@ class MainActivity : Activity() {
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
         top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
-        if(to!="Map") outer.addView(top)
+        if(to!="Map" && to!="Media") outer.addView(top)
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
-        if(to == "Map") {
+        if(to == "Map" || to == "Media") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
-            showMap(content)
+            if(to=="Map")showMap(content) else showMedia(content)
         } else {
             val scroller = ScrollView(this).apply { isFillViewport=true }
             scroller.addView(content)
@@ -276,17 +276,17 @@ class MainActivity : Activity() {
         repeat(2) { pos->
             val name=widgetNames[(widgetIndex+pos)%widgetNames.size]
             val tile=when(name) {
-                "Radio"->widgetCard("RADIO","Audio player")
+                "Radio"->widgetCard("RADIO",if(MediaCentre.playingSource=="Radio")MediaCentre.playingName else "Choose a station").apply{setOnClickListener{prefs.edit().putString("media_mode","RADIO").apply();render("Media")}}
                 "Mirror"->widgetCard("MIRROR","Phone connection")
-                "Video"->widgetCard("VIDEO","Local video player")
+                "Video"->widgetCard("VIDEO",if(MediaCentre.playingSource=="Video")MediaCentre.playingName else "Local video player").apply{setOnClickListener{prefs.edit().putString("media_mode","FILES").putString("media_filter","VIDEO").apply();render("Media")}}
                 "Weather"->widgetCard("WEATHER","Local weather\nNot configured")
                 "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
                     SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
-                "Now Playing"->widgetCard("NOW PLAYING",nowTitle()).apply{setOnClickListener{render("Media")}}
+                "Now Playing"->widgetCard("NOW PLAYING",if(MediaCentre.playingName.isNotEmpty())MediaCentre.playingName else nowTitle()).apply{setOnClickListener{render("Media")}}
                 else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
             }
             tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
-            tile.setOnClickListener{expandWidget(name)}
+            if(name=="Mirror" || name=="Clock" || name=="Weather")tile.setOnClickListener{expandWidget(name)}
             holder.addView(tile,LinearLayout.LayoutParams(-1,0,1f).apply {if(pos>0)topMargin=dp(5)})
         }
         val controls=row().apply {gravity=Gravity.CENTER}
@@ -394,45 +394,24 @@ class MainActivity : Activity() {
         } catch (_:SecurityException) {null}
     }
     private fun nowTitle():String = controller()?.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Connect your music"
-    private fun showMedia(target: LinearLayout) {
-        val title = txt("MEDIA CENTRE",22f,blue,true)
-        target.addView(title)
-        val mc=controller()
-        if(mc==null) {
-            target.addView(txt("Enable Notification Access for Drive XFH to control active music apps without leaving the dashboard.",15f,dim))
-            target.addView(action("ENABLE MEDIA ACCESS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
-            target.addView(txt("Start music in your favourite app once; then come back to Drive XFH.",12f,dim))
-            return
+    private fun showMedia(target:LinearLayout) {
+        val centre=MediaCentre(this){
+            val intent=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply{
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            }
+            startActivityForResult(intent,524)
         }
-        val display=row()
-        val art=mc.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?:mc.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-        if(art!=null) {
-            display.addView(ImageView(this).apply {setImageBitmap(art);scaleType=ImageView.ScaleType.CENTER_CROP; background=bg(glass2)},
-                lp(dp(140),dp(140)))
-        } else {
-            display.addView(txt("♫",54f,blue).apply{background=bg(glass2);gravity=Gravity.CENTER},lp(dp(140),dp(140)))
-        }
-        val details=col().apply {
-            setPadding(dp(20),dp(12),dp(10),dp(8))
-            addView(txt(nowTitle(),22f,bright,true))
-            addView(txt(mc.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown artist",15f,dim))
-            addView(txt(mc.packageName,11f,blue))
-        }
-        display.addView(details,LinearLayout.LayoutParams(0,dp(140),1f))
-        target.addView(display)
-        val buttons=row()
-        listOf("⏮" to { mc.transportControls.skipToPrevious() },
-            (if(mc.playbackState?.state==android.media.session.PlaybackState.STATE_PLAYING) "Ⅱ" else "▶") to {
-                if(mc.playbackState?.state==android.media.session.PlaybackState.STATE_PLAYING) mc.transportControls.pause() else mc.transportControls.play()
-            }, "⏭" to {mc.transportControls.skipToNext()}).forEach { (label,cb)->
-            val b=action(label){cb();handler.postDelayed({if(page=="Media")render("Media")},350)}
-            buttons.addView(b,LinearLayout.LayoutParams(0,dp(62),1f).apply {setMargins(dp(4),dp(5),dp(4),0)})
-        }
-        target.addView(buttons)
-        target.addView(action("REFRESH NOW PLAYING"){render("Media")})
+        target.addView(centre,LinearLayout.LayoutParams(-1,-1))
     }
-
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode==524 && resultCode==Activity.RESULT_OK){
+            val uri=data?.data?:return
+            try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
+            prefs.edit().putString("media_folder",uri.toString()).apply()
+            if(page=="Media")render("Media")
+        }
+    }
 
     private fun findAddressSuggestions(field:EditText) {
         val query=field.text.toString().trim()
