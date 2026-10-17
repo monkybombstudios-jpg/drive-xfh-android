@@ -506,7 +506,7 @@ class MainActivity : Activity() {
         val body=row().apply{gravity=Gravity.TOP}
         target.addView(body,LinearLayout.LayoutParams(-1,0,1f))
         val panel=col().apply{background=bg(glass,8);setPadding(dp(8),dp(3),dp(8),dp(3))}
-        val panelScroll=ScrollView(this).apply{isFillViewport=false;fillViewport=false;clipToPadding=false;addView(panel)}
+        val panelScroll=ScrollView(this).apply{isFillViewport=false;clipToPadding=false;addView(panel)}
         body.addView(panelScroll,LinearLayout.LayoutParams(dp(265),-1))
         fun compactButton(label:String,callback:()->Unit)=txt(label,11f,bright,true).apply{
             gravity=Gravity.CENTER;background=bg(glass2,7)
