@@ -55,6 +55,26 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
             }
             controls.addView(btn,LinearLayout.LayoutParams(px(43),px(43)).apply{bottomMargin=px(5)})
         }
+        val rotationControls=LinearLayout(context).apply {orientation=LinearLayout.HORIZONTAL}
+        for((label,delta) in listOf("↶" to -20.0,"↷" to 20.0)){
+            val btn=TextView(context).apply{
+                text=label;textSize=23f;setTextColor(Color.WHITE);gravity=Gravity.CENTER
+                background=GradientDrawable().apply{
+                    setColor(Color.argb(220,27,27,30));cornerRadius=px(7).toFloat()
+                }
+                setOnClickListener{
+                    scene?.let{map->
+                        val camera=map.cameraPosition
+                        map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder(camera).bearing((camera.bearing+delta+360.0)%360.0).build()))
+                    }
+                }
+            }
+            rotationControls.addView(btn,LinearLayout.LayoutParams(px(43),px(43)).apply{rightMargin=px(5)})
+        }
+        addView(rotationControls,LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{
+            rightMargin=px(11);bottomMargin=px(160)
+        })
         addView(controls,LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{
             rightMargin=px(11);bottomMargin=px(58)
         })
