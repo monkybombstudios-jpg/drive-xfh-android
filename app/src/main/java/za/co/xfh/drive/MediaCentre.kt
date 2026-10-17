@@ -253,6 +253,51 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             }catch(e:Exception){activity.runOnUiThread{if(mode=="PODCASTS"){list?.removeAllViews();item("Feed could not load",e.message?:"Connection error"){} }}}
         }.start()
     }
+    private fun saveStation(name:String,url:String){
+        val arr=stations()
+        for(i in 0 until arr.length())if(arr.optJSONObject(i)?.optString("url")==url){
+            Toast.makeText(activity,"Station already saved",Toast.LENGTH_SHORT).show();return
+        }
+        arr.put(org.json.JSONObject().put("name",name).put("url",url))
+        prefs.edit().putString("radio_stations",arr.toString()).apply()
+        Toast.makeText(activity,"Saved to Radio favourites",Toast.LENGTH_SHORT).show()
+    }
+    private fun loadUsStations(){
+        if(mode!="RADIO"||radioView!="POPULAR US")return
+        list?.removeAllViews();item("Loading popular US radio…","Checking Radio Browser"){}
+        Thread{
+            try{
+                val endpoint="https://de1.api.radio-browser.info/json/stations/search?countrycode=US&hidebroken=true&order=votes&reverse=true&limit=80&is_https=true"
+                val c=java.net.URL(endpoint).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=12000;c.readTimeout=15000
+                c.setRequestProperty("User-Agent","DriveXFH/0.16.2 Android radio")
+                val entries=mutableListOf<Triple<String,String,String>>()
+                try{
+                    if(c.responseCode!=200)throw Exception("Directory HTTP "+c.responseCode)
+                    val data=org.json.JSONArray(c.inputStream.bufferedReader().use{it.readText()})
+                    for(i in 0 until data.length()){
+                        val station=data.optJSONObject(i)?:continue
+                        val name=station.optString("name").trim()
+                        val url=station.optString("url_resolved",station.optString("url")).trim()
+                        if(name.isBlank()||!url.startsWith("https://"))continue
+                        val tags=station.optString("tags").split(",").take(2).joinToString(" · ")
+                        val details=listOf(station.optString("state"),tags).filter{it.isNotBlank()}.joinToString(" · ")
+                        entries.add(Triple(name,url,details))
+                    }
+                }finally{c.disconnect()}
+                activity.runOnUiThread{
+                    if(mode=="RADIO"&&radioView=="POPULAR US"){
+                        popularStations.clear();popularStations.addAll(entries);populate()
+                        if(entries.isEmpty())item("No compatible stations found","Try refresh or add manually"){}
+                    }
+                }
+            }catch(e:Exception){activity.runOnUiThread{
+                if(mode=="RADIO"&&radioView=="POPULAR US"){
+                    list?.removeAllViews();item("Directory unavailable",e.message?:"Try again later"){}
+                }
+            }}
+        }.start()
+    }
     private fun stations()=try{org.json.JSONArray(prefs.getString("radio_stations","[]"))}catch(_:Exception){org.json.JSONArray()}
     private fun addStation(){
         val form=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(d(14),d(8),d(14),d(8))}
@@ -263,8 +308,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             .setPositiveButton("SAVE"){_,_->
                 val n=name.text.toString().trim();val u=url.text.toString().trim()
                 if(n.isNotBlank()&&u.startsWith("https://")){
-                    val arr=stations();arr.put(org.json.JSONObject().put("name",n).put("url",u))
-                    prefs.edit().putString("radio_stations",arr.toString()).apply();populate()
+                    saveStation(n,u);populate()
                 }else Toast.makeText(activity,"Enter a name and a direct HTTPS stream URL",Toast.LENGTH_LONG).show()
             }.setNegativeButton("CANCEL",null).show()
     }
