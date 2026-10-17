@@ -40,6 +40,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private var list:LinearLayout?=null
     private var video:VideoView?=null
     private var activeRadio:MediaPlayer?=null
+    private var radioView="SAVED"
+    private val popularStations=mutableListOf<Triple<String,String,String>>()
     private val podcastEpisodes=mutableListOf<Pair<String,String>>()
     private var podcastFeed=prefs.getString("podcast_feed","https://feeds.npr.org/510318/podcast.xml")?:"https://feeds.npr.org/510318/podcast.xml"
     private fun d(v:Int)=(v*resources.displayMetrics.density).toInt()
@@ -77,7 +79,11 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         }else if(mode=="PODCASTS"){
             tabs.addView(text("RSS EPISODES",11f,blue,true),LayoutParams(-1,d(31)))
         }else{
-            tabs.addView(text("INTERNET RADIO",11f,blue,true),LayoutParams(-1,d(31)))
+            for(tab in listOf("SAVED","POPULAR US")){
+                val b=button(tab){radioView=tab;populate();if(tab=="POPULAR US"&&popularStations.isEmpty())loadUsStations()}
+                if(radioView==tab)b.setTextColor(blue)
+                tabs.addView(b,LayoutParams(0,d(31),1f).apply{rightMargin=d(2)})
+            }
         }
         left.addView(tabs,LayoutParams(-1,d(32)))
         val controls=LinearLayout(activity).apply{orientation=HORIZONTAL}
@@ -89,7 +95,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                 if(mode=="MEDIA"){currentFolder=currentFolder?.parentFile;populate()}else addStation()
             },LayoutParams(0,d(29),1f))
             controls.addView(button(if(mode=="MEDIA")"CHOOSE FOLDER" else "REFRESH"){
-                if(mode=="MEDIA")selectFolder()else populate()
+                if(mode=="MEDIA")selectFolder()else if(radioView=="POPULAR US")loadUsStations() else populate()
             },LayoutParams(0,d(29),1f).apply{leftMargin=d(3)})
         }
         left.addView(controls,LayoutParams(-1,d(30)))
@@ -108,6 +114,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         populate()
         showDetails()
         if(mode=="PODCASTS")loadPodcasts()
+        if(mode=="RADIO"&&radioView=="POPULAR US")loadUsStations()
     }
     private fun item(title:String,subtitle:String,selected:Boolean=false,click:()->Unit){
         val container=LinearLayout(activity).apply{
@@ -132,13 +139,26 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             return
         }
         if(mode=="RADIO"){
-            val saved=stations()
-            if(saved.length()==0)item("No stations saved","+ STATION to add a direct internet radio stream"){}
-            for(i in 0 until saved.length()){
-                val st=saved.optJSONObject(i)?:continue
-                val title=st.optString("name","Station")
-                val url=st.optString("url","")
-                item(title,url,playingSource=="Radio"&&playingName==title){playStream(title,url)}
+            if(radioView=="POPULAR US"){
+                if(popularStations.isEmpty())item("Popular US stations","Fetching live directory…"){}
+                for((name,url,details) in popularStations){
+                    item(name,details,playingSource=="Radio"&&playingName==name){
+                        AlertDialog.Builder(activity).setTitle(name)
+                            .setItems(arrayOf("▶ Play station","☆ Save station")){_,choice->
+                                if(choice==0)playStream(name,url)
+                                else saveStation(name,url)
+                            }.show()
+                    }
+                }
+            }else{
+                val saved=stations()
+                if(saved.length()==0)item("No stations saved","Select POPULAR US or use + STATION"){}
+                for(i in 0 until saved.length()){
+                    val st=saved.optJSONObject(i)?:continue
+                    val title=st.optString("name","Station")
+                    val url=st.optString("url","")
+                    item(title,url,playingSource=="Radio"&&playingName==title){playStream(title,url)}
+                }
             }
             return
         }
