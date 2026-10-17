@@ -79,7 +79,12 @@ class MainActivity : Activity() {
                 val daily=obj.getJSONObject("daily")
                 val low=daily.getJSONArray("temperature_2m_min").getDouble(0).toInt()
                 val high=daily.getJSONArray("temperature_2m_max").getDouble(0).toInt()
-                val summary=type+" | "+low+"° to "+high+"°C | "+String.format(Locale.US,"%.2f, %.2f",loc.latitude,loc.longitude)
+                val suburb=try{
+                    val result=android.location.Geocoder(this,Locale.getDefault()).getFromLocation(loc.latitude,loc.longitude,1)?.firstOrNull()
+                    result?.subLocality?:result?.locality?:result?.subAdminArea
+                }catch(_:Exception){null}
+                val place=suburb?.takeIf{it.isNotBlank()}?:String.format(Locale.US,"%.2f, %.2f",loc.latitude,loc.longitude)
+                val summary=type+" | "+low+"° to "+high+"°C | "+place
                 runOnUiThread{weatherText=summary;if(page=="Home")drawWidgets()}
             }catch(_:Exception){runOnUiThread{weatherLast=0L;weatherText="Weather unavailable"}}
         }.start()
@@ -132,12 +137,14 @@ class MainActivity : Activity() {
         window.statusBarColor = base
         window.navigationBarColor = base
         if(prefs.getBoolean("awake",true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        MediaCentre.onChanged={handler.post{if(page=="Home")drawWidgets()}}
         render("Home")
         handler.postDelayed(tick,60000)
     }
     override fun onDestroy() {
         handler.removeCallbacks(tick)
         stopTurnListener()
+        MediaCentre.onChanged=null
         tts?.stop();tts?.shutdown()
         map?.onDetach()
         styledMap?.dispose()
