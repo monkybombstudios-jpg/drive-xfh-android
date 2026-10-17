@@ -545,6 +545,37 @@ class MainActivity : Activity() {
             }catch(_:Exception){}
         }
     }
+    private fun rerouteFrom(position:android.location.Location){
+        val parts=prefs.getString("route_destination_point","")?.split(",")?:return
+        if(parts.size!=2)return
+        rerouteBusy=true;rerouteAt=android.os.SystemClock.elapsedRealtime()
+        Thread{
+            try{
+                val url="https://router.project-osrm.org/route/v1/driving/"+position.longitude+","+position.latitude+";"+parts[1]+","+parts[0]+"?overview=full&geometries=geojson&steps=true&alternatives=true"
+                val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=14000;c.readTimeout=20000
+                val json=try{if(c.responseCode!=200)throw Exception("Router unavailable");org.json.JSONObject(c.inputStream.bufferedReader().use{it.readText()})}finally{c.disconnect()}
+                val routes=json.getJSONArray("routes");if(routes.length()==0)throw Exception("No reroute found")
+                var route=routes.getJSONObject(0)
+                if(prefs.getString("nav_mode","fastest")=="shortest")for(i in 1 until routes.length()){val r=routes.getJSONObject(i);if(r.getDouble("distance")<route.getDouble("distance"))route=r}
+                val coordinates=route.getJSONObject("geometry").getJSONArray("coordinates")
+                val points=org.json.JSONArray()
+                for(i in 0 until coordinates.length()){val p=coordinates.getJSONArray(i);points.put(org.json.JSONArray().put(p.getDouble(1)).put(p.getDouble(0)))}
+                if(points.length()<2)throw Exception("Empty reroute")
+                val instructions=org.json.JSONArray();val legs=route.getJSONArray("legs")
+                for(i in 0 until legs.length()){val steps=legs.getJSONObject(i).getJSONArray("steps");for(j in 0 until steps.length()){
+                    val step=steps.getJSONObject(j);val m=step.getJSONObject("maneuver");val p=m.getJSONArray("location")
+                    instructions.put(org.json.JSONObject().put("lat",p.getDouble(1)).put("lon",p.getDouble(0)).put("instruction",(m.optString("type")+" "+m.optString("modifier")+" "+step.optString("name")).trim()))
+                }}
+                runOnUiThread{
+                    prefs.edit().putString("route_points",points.toString()).putString("route_steps",instructions.toString())
+                        .putString("route_start",position.latitude.toString()+","+position.longitude.toString()).putBoolean("nav_engaged",true).apply()
+                    rerouteBusy=false;lastSpoken="";speak("Route recalculated")
+                    if(page=="Home")render("Home")
+                }
+            }catch(_:Exception){runOnUiThread{rerouteBusy=false;Toast.makeText(this,"Unable to reroute. Check connection.",Toast.LENGTH_SHORT).show()}}
+        }.start()
+    }
     private fun showMap(target: LinearLayout) {
         target.addView(txt("NAVIGATION  •  ROUTE PLANNER",15f,bright,true),lp(-1,dp(27)))
         val body=row().apply{gravity=Gravity.TOP}
