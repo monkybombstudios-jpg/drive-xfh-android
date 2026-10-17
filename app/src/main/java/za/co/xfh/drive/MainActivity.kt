@@ -200,6 +200,7 @@ class MainActivity : Activity() {
         outer.addView(stage,LinearLayout.LayoutParams(-1,0,1f))
         stageView=stage
         showBackdrop(stage)
+        showRouteGuidance(stage)
         stage.addView(View(this).apply {
             background=android.graphics.drawable.GradientDrawable().apply {
                 setColor(Color.WHITE);cornerRadius=dp(2).toFloat()
@@ -414,6 +415,89 @@ class MainActivity : Activity() {
         target.addView(action("REFRESH NOW PLAYING"){render("Media")})
     }
 
+
+    private fun findAddressSuggestions(field:EditText) {
+        val query=field.text.toString().trim()
+        if(query.length<3){Toast.makeText(this,"Enter at least 3 characters",Toast.LENGTH_SHORT).show();return}
+        Toast.makeText(this,"Searching addresses…",Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val url="https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q="+
+                    java.net.URLEncoder.encode(query,"UTF-8")
+                val c=java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout=12000;c.readTimeout=12000
+                c.setRequestProperty("User-Agent","DriveXFH/0.13 prototype")
+                val results=try{
+                    if(c.responseCode!=200)throw Exception("Search unavailable")
+                    org.json.JSONArray(c.inputStream.bufferedReader().use{it.readText()})
+                }finally{c.disconnect()}
+                val titles=(0 until results.length()).map{results.getJSONObject(it).getString("display_name")}.toTypedArray()
+                runOnUiThread{
+                    if(titles.isEmpty())Toast.makeText(this,"No matches. Try suburb, city or postal code.",Toast.LENGTH_LONG).show()
+                    else AlertDialog.Builder(this).setTitle("Choose the correct address")
+                        .setItems(titles){_,which->
+                            val item=results.getJSONObject(which)
+                            field.setText(titles[which])
+                            field.setSelection(field.length())
+                            val prefix=if(field.tag=="home")"nav_home_point" else "nav_dest_point"
+                            prefs.edit().putString(prefix,item.getString("lat")+","+item.getString("lon"))
+                                .putString(prefix+"_label",titles[which]).apply()
+                        }.show()
+                }
+            }catch(e:Exception){runOnUiThread{Toast.makeText(this,e.message?:"Search error",Toast.LENGTH_LONG).show()}}
+        }.start()
+    }
+    private fun selectedCoordinates(prefix:String,label:String):GeoPoint? {
+        if(prefs.getString(prefix+"_label","")!=label)return null
+        return try{
+            val parts=prefs.getString(prefix,"")!!.split(",")
+            GeoPoint(parts[0].toDouble(),parts[1].toDouble())
+        }catch(_:Exception){null}
+    }
+    private fun showRouteGuidance(stage:FrameLayout) {
+        val steps=try{org.json.JSONArray(prefs.getString("route_steps","[]"))}catch(_:Exception){return}
+        if(steps.length()==0)return
+        val guidance=txt("Route ready",12f,bright,true).apply{
+            background=bg(glass,8)
+            setPadding(dp(10),dp(6),dp(10),dp(6))
+            maxLines=2
+        }
+        stage.addView(guidance,FrameLayout.LayoutParams(dp(230),dp(50),Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply{topMargin=dp(52)})
+        val lm=getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+        val update:(android.location.Location)->Unit={location->
+            try{
+                var nearest=0
+                var best=Double.MAX_VALUE
+                for(i in 0 until steps.length()){
+                    val obj=steps.getJSONObject(i)
+                    val result=FloatArray(1)
+                    android.location.Location.distanceBetween(location.latitude,location.longitude,
+                        obj.getDouble("lat"),obj.getDouble("lon"),result)
+                    if(result[0]<best){best=result[0].toDouble();nearest=i}
+                }
+                var chosen=nearest
+                if(best<35.0 && chosen<steps.length()-1)chosen++
+                val step=steps.getJSONObject(chosen)
+                val distance=FloatArray(1)
+                android.location.Location.distanceBetween(location.latitude,location.longitude,
+                    step.getDouble("lat"),step.getDouble("lon"),distance)
+                val instruction=step.optString("instruction","Continue")
+                guidance.text=String.format(Locale.US,"%.0f m  •  %s",distance[0],instruction)
+            }catch(_:Exception){}
+        }
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){
+            try{
+                lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)?.let(update)
+                lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER,3000L,8f,object:android.location.LocationListener{
+                    override fun onLocationChanged(location:android.location.Location){
+                        if(page=="Home" && guidance.parent!=null)update(location)
+                        else try{lm.removeUpdates(this)}catch(_:Exception){}
+                    }
+                })
+            }catch(_:Exception){}
+        }else guidance.text=prefs.getString("route_summary","Route ready")
+    }
     private fun showMap(target: LinearLayout) {
         target.addView(txt("NAVIGATION  •  ROUTE PLANNER",17f,bright,true))
         val body=row().apply{gravity=Gravity.TOP}
@@ -425,7 +509,8 @@ class MainActivity : Activity() {
             hint="Home address";textSize=12f;setTextColor(bright);setHintTextColor(dim)
         }
         panel.addView(txt("HOME ADDRESS",10f,blue,true))
-        panel.addView(home,lp(-1,dp(36)))
+        panel.addView(home.apply{tag="home"},lp(-1,dp(36)))
+        panel.addView(action("FIND HOME ADDRESS"){findAddressSuggestions(home)},lp(-1,dp(29)))
         panel.addView(action("SAVE HOME") {
             prefs.edit().putString("nav_home",home.text.toString().trim()).apply()
             Toast.makeText(this,"Home saved",Toast.LENGTH_SHORT).show()
@@ -442,7 +527,8 @@ class MainActivity : Activity() {
             hint="Destination address";textSize=12f;setTextColor(bright);setHintTextColor(dim)
         }
         panel.addView(txt("DESTINATION",10f,blue,true))
-        panel.addView(destination,lp(-1,dp(36)))
+        panel.addView(destination.apply{tag="destination"},lp(-1,dp(36)))
+        panel.addView(action("FIND DESTINATION"){findAddressSuggestions(destination)},lp(-1,dp(29)))
         val status=txt("Internet required for route calculation.",10f,dim)
         lateinit var calculate:TextView
         calculate=action("CALCULATE ROUTE") {
@@ -510,9 +596,9 @@ class MainActivity : Activity() {
         status.text="Calculating route…";button.isEnabled=false
         Thread {
             try{
-                val start=if(fromHome)geocode(home) else gpsStart()
+                val start=if(fromHome)(selectedCoordinates("nav_home_point",home)?:geocode(home)) else gpsStart()
                 if(fromHome)Thread.sleep(1200)
-                val finish=geocode(dest)
+                val finish=selectedCoordinates("nav_dest_point",dest)?:geocode(dest)
                 val url="https://router.project-osrm.org/route/v1/driving/"+
                     start.longitude+","+start.latitude+";"+finish.longitude+","+finish.latitude+
                     "?overview=full&geometries=geojson&steps=true"
@@ -533,10 +619,28 @@ class MainActivity : Activity() {
                     arr.put(org.json.JSONArray().put(p.getDouble(1)).put(p.getDouble(0)))
                 }
                 if(arr.length()<2)throw Exception("Empty route returned.")
+
+                val instructions=org.json.JSONArray()
+                val legs=route.optJSONArray("legs")
+                if(legs!=null)for(li in 0 until legs.length()){
+                    val steps=legs.getJSONObject(li).optJSONArray("steps")?:continue
+                    for(si in 0 until steps.length()){
+                        val step=steps.getJSONObject(si)
+                        val maneuver=step.getJSONObject("maneuver")
+                        val p=maneuver.getJSONArray("location")
+                        val kind=maneuver.optString("type","continue")
+                        val turn=maneuver.optString("modifier","")
+                        val street=step.optString("name","")
+                        val caption=(kind+" "+turn+" "+street).trim().replace("  "," ")
+                        instructions.put(org.json.JSONObject().put("lat",p.getDouble(1))
+                            .put("lon",p.getDouble(0)).put("instruction",caption))
+                    }
+                }
                 val summary=String.format(Locale.US,"%.1f km · %.0f min",route.getDouble("distance")/1000.0,route.getDouble("duration")/60.0)
                 runOnUiThread {
                     prefs.edit().putString("route_points",arr.toString())
                         .putString("route_destination",dest).putString("route_summary",summary)
+                        .putString("route_steps",instructions.toString())
                         .putString("backdrop","map").apply()
                     Toast.makeText(this,"Route ready: "+summary,Toast.LENGTH_LONG).show()
                     render("Home")
@@ -602,7 +706,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.12  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.13  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
