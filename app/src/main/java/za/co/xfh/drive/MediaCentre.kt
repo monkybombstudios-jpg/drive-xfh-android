@@ -116,11 +116,12 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         if(mode=="PODCASTS")loadPodcasts()
         if(mode=="RADIO"&&radioView=="POPULAR US")loadUsStations()
     }
-    private fun item(title:String,subtitle:String,selected:Boolean=false,click:()->Unit){
+    private fun item(title:String,subtitle:String,selected:Boolean=false,longClick:(()->Unit)?=null,click:()->Unit){
         val container=LinearLayout(activity).apply{
             orientation=VERTICAL;setPadding(d(5),d(2),d(5),d(2))
             setBackgroundColor(if(selected)Color.rgb(46,61,82) else bg)
             setOnClickListener{click()}
+            if(longClick!=null)setOnLongClickListener{longClick();true}
         }
         container.addView(text(title,12f,ink,true),LayoutParams(-1,d(25)))
         if(subtitle.isNotBlank())container.addView(text(subtitle,10f,muted),LayoutParams(-1,d(18)))
@@ -142,13 +143,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             if(radioView=="POPULAR US"){
                 if(popularStations.isEmpty())item("Popular US stations","Fetching live directory…"){}
                 for((name,url,details) in popularStations){
-                    item(name,details,playingSource=="Radio"&&playingName==name){
-                        AlertDialog.Builder(activity).setTitle(name)
-                            .setItems(arrayOf("▶ Play station","☆ Save station")){_,choice->
-                                if(choice==0)playStream(name,url)
-                                else saveStation(name,url)
-                            }.show()
-                    }
+                    item(name,details+" · hold to save",playingSource=="Radio"&&playingName==name,
+                        longClick={saveStation(name,url)}){playStream(name,url)}
                 }
             }else{
                 val saved=stations()
