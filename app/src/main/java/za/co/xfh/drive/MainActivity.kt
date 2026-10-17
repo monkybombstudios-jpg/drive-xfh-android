@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
         top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
-        outer.addView(top)
+        if(to!="Map") outer.addView(top)
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
         if(to == "Map") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
@@ -502,19 +502,25 @@ class MainActivity : Activity() {
         }else guidance.text=prefs.getString("route_summary","Route ready")
     }
     private fun showMap(target: LinearLayout) {
-        target.addView(txt("NAVIGATION  •  ROUTE PLANNER",17f,bright,true))
+        target.addView(txt("NAVIGATION  •  ROUTE PLANNER",15f,bright,true),lp(-1,dp(27)))
         val body=row().apply{gravity=Gravity.TOP}
         target.addView(body,LinearLayout.LayoutParams(-1,0,1f))
-        val panel=col().apply{background=bg(glass,8);setPadding(dp(9),dp(4),dp(9),dp(4))}
-        body.addView(panel,LinearLayout.LayoutParams(dp(265),-1))
+        val panel=col().apply{background=bg(glass,8);setPadding(dp(8),dp(3),dp(8),dp(3))}
+        val panelScroll=ScrollView(this).apply{isFillViewport=false;fillViewport=false;clipToPadding=false;addView(panel)}
+        body.addView(panelScroll,LinearLayout.LayoutParams(dp(265),-1))
+        fun compactButton(label:String,callback:()->Unit)=txt(label,11f,bright,true).apply{
+            gravity=Gravity.CENTER;background=bg(glass2,7)
+            setPadding(dp(5),0,dp(5),0)
+            setOnClickListener{callback()}
+        }
         val home=EditText(this).apply{
             setSingleLine(true);setText(prefs.getString("nav_home",""))
             hint="Home address";textSize=12f;setTextColor(bright);setHintTextColor(dim)
         }
         panel.addView(txt("HOME ADDRESS",10f,blue,true))
         panel.addView(home.apply{tag="home"},lp(-1,dp(36)))
-        panel.addView(action("FIND HOME ADDRESS"){findAddressSuggestions(home)},lp(-1,dp(29)))
-        panel.addView(action("SAVE HOME") {
+        panel.addView(compactButton("FIND HOME ADDRESS"){findAddressSuggestions(home)},lp(-1,dp(29)))
+        panel.addView(compactButton("SAVE HOME") {
             prefs.edit().putString("nav_home",home.text.toString().trim()).apply()
             Toast.makeText(this,"Home saved",Toast.LENGTH_SHORT).show()
         },lp(-1,dp(32)))
@@ -531,10 +537,10 @@ class MainActivity : Activity() {
         }
         panel.addView(txt("DESTINATION",10f,blue,true))
         panel.addView(destination.apply{tag="destination"},lp(-1,dp(36)))
-        panel.addView(action("FIND DESTINATION"){findAddressSuggestions(destination)},lp(-1,dp(29)))
+        panel.addView(compactButton("FIND DESTINATION"){findAddressSuggestions(destination)},lp(-1,dp(29)))
         val status=txt("Internet required for route calculation.",10f,dim)
         lateinit var calculate:TextView
-        calculate=action("CALCULATE ROUTE") {
+        calculate=compactButton("CALCULATE ROUTE") {
             prefs.edit().putString("nav_draft",destination.text.toString()).apply()
             planRoute(fromHome.isChecked,home.text.toString().trim(),destination.text.toString().trim(),status,calculate)
         }
@@ -643,6 +649,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     prefs.edit().putString("route_points",arr.toString())
                         .putString("route_destination",dest).putString("route_summary",summary)
+                        .putString("route_start",start.latitude.toString()+","+start.longitude.toString())
                         .putString("route_steps",instructions.toString())
                         .putString("backdrop","map").apply()
                     Toast.makeText(this,"Route ready: "+summary,Toast.LENGTH_LONG).show()
@@ -709,7 +716,7 @@ class MainActivity : Activity() {
         target.addView(action("MEDIA PERMISSIONS"){open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))})
         target.addView(space(h=dp(8)))
         target.addView(action("OPEN AMIRRORING SUITE"){launchPackage("com.mirroring.suit")})
-        target.addView(txt("Drive XFH v0.14  •  Android 13  •  iDrive-inspired prototype",12f,dim))
+        target.addView(txt("Drive XFH v0.14.1  •  Android 13  •  iDrive-inspired prototype",12f,dim))
         target.addView(txt("Independent mirroring, route guidance and call integration are not implemented yet.",12f,dim))
     }
     private fun open(intent:Intent) {
