@@ -71,12 +71,26 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                 val here=findLocation()
                 val centre=here ?: points.firstOrNull() ?: LatLng(-32.98,27.87)
                 // Initial 2D overview for long journeys; use 3D close up near the vehicle.
-                val near=points.isEmpty() || points.size<2
+                val near=here!=null || points.size<2
                 val zoom=if(near)16.0 else 8.0
                 val tilt=if(near)58.0 else 45.0
                 map.cameraPosition=CameraPosition.Builder()
                     .target(centre).zoom(zoom).tilt(tilt).build()
-                if(here!=null)map.addMarker(MarkerOptions().position(here).title("Your location"))
+                if(here!=null) {
+                    val arrow=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas=android.graphics.Canvas(arrow)
+                    val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{
+                        color=Color.rgb(35,140,244);style=android.graphics.Paint.Style.FILL
+                        setShadowLayer(5f,0f,3f,Color.DKGRAY)
+                    }
+                    val shape=android.graphics.Path().apply{
+                        moveTo(48f,5f);lineTo(80f,84f);lineTo(48f,67f)
+                        lineTo(16f,84f);close()
+                    }
+                    canvas.drawPath(shape,paint)
+                    val icon=org.maplibre.android.annotations.IconFactory.getInstance(context).fromBitmap(arrow)
+                    map.addMarker(MarkerOptions().position(here).title("Current position").icon(icon))
+                }
             }
         }
         view.onStart()
