@@ -27,6 +27,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         var isPlaying=false
         var streamPlayer:MediaPlayer?=null
         var videoPlayer:VideoView?=null
+        var cover:android.graphics.Bitmap?=null
+        var artworkUrl=""
         var queue=mutableListOf<Pair<String,String>>()
         var queueIndex=0
         var queuePlay:((Int)->Unit)?=null
@@ -230,11 +232,13 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         try{
             releaseRadio()
             if(isVideo){
+                cover=null;artworkUrl=""
                 stop()
                 playingUri=uri;playingName=f.name?:"Video";playingArtist="";playingSource="Video";isPlaying=true
                 showDetails()
             }else{
                 stop()
+                cover=null;artworkUrl=""
                 val mp=MediaPlayer()
                 mp.setDataSource(activity,uri)
                 mp.prepare()
@@ -245,6 +249,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
                     retriever.setDataSource(activity,uri)
                     playingName=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?:playingName
                     playingArtist=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?:""
+                    retriever.embeddedPicture?.let{cover=BitmapFactory.decodeByteArray(it,0,it.size)}
                     retriever.release()
                 }catch(_:Exception){}
                 mp.setOnCompletionListener{isPlaying=false;showDetails()}
@@ -364,6 +369,7 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private fun playStream(name:String,url:String,source:String="Radio"){
         releaseRadio();stop()
         queueIndex=queue.indexOfFirst{it.second==url}.coerceAtLeast(0)
+        cover=null
         playingName=name;playingArtist=if(source=="Podcast")"Podcast episode" else "Internet radio";playingSource=source;isPlaying=false
         showDetails()
         val p=MediaPlayer();activeRadio=p;streamPlayer=p
@@ -399,7 +405,8 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
             video=v;videoPlayer=v;surface.addView(v,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))
         }else{
             val art=ImageView(activity).apply{scaleType=ImageView.ScaleType.FIT_CENTER}
-            if(playingSource=="Music"&&playingUri!=null)try{
+            cover?.let{art.setImageBitmap(it)}
+            if(art.drawable==null && playingSource=="Music"&&playingUri!=null)try{
                 val r=MediaMetadataRetriever();r.setDataSource(activity,playingUri)
                 val bytes=r.embeddedPicture
                 if(bytes!=null)art.setImageBitmap(BitmapFactory.decodeByteArray(bytes,0,bytes.size))
