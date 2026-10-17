@@ -143,8 +143,17 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
     private fun populate(){
         list?.removeAllViews()
         if(mode=="PODCASTS"){
-            if(podcastEpisodes.isEmpty())item("Podcast episodes","Tap REFRESH to load an RSS feed"){}
-            for((title,url) in podcastEpisodes)item("♫  "+title,"PODCAST · stream episode",playingName==title){playStream(title,url,"Podcast")}
+            if(podcastFeed.isBlank()){
+                for((name,url) in podcastShows)item("◉  "+name,"Tap to browse episodes"){
+                    podcastName=name;podcastFeed=url
+                    prefs.edit().putString("podcast_feed",url).putString("podcast_show_name",name).apply()
+                    podcastEpisodes.clear();render()
+                }
+                item("＋  Custom podcast RSS","Add another show"){editPodcastFeed()}
+            }else{
+                if(podcastEpisodes.isEmpty())item("Loading episodes…","Fetching "+podcastName){}
+                for((title,url) in podcastEpisodes)item("♫  "+title,podcastName,playingName==title){playStream(title,url,"Podcast")}
+            }
             return
         }
         if(mode=="RADIO"){
@@ -214,12 +223,12 @@ class MediaCentre(private val activity:Activity,private val selectFolder:()->Uni
         AlertDialog.Builder(activity).setTitle("Podcast RSS feed").setView(input)
             .setPositiveButton("LOAD"){_,_->
                 val value=input.text.toString().trim()
-                if(value.startsWith("https://")){podcastFeed=value;prefs.edit().putString("podcast_feed",value).apply();loadPodcasts()}
+                if(value.startsWith("https://")){podcastFeed=value;podcastName="Custom podcast";podcastEpisodes.clear();prefs.edit().putString("podcast_feed",value).putString("podcast_show_name",podcastName).apply();render()}
                 else Toast.makeText(activity,"Use an HTTPS RSS feed",Toast.LENGTH_SHORT).show()
             }.setNegativeButton("CANCEL",null).show()
     }
     private fun loadPodcasts(){
-        if(mode!="PODCASTS")return
+        if(mode!="PODCASTS"||podcastFeed.isBlank())return
         list?.removeAllViews()
         item("Loading episodes…","Fetching podcast RSS feed"){}
         Thread{
