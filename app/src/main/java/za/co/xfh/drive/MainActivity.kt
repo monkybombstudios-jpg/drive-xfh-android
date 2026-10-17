@@ -289,113 +289,98 @@ class MainActivity : Activity() {
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED) enableLocation()
         else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),100)
     }
-    private val widgetNames=listOf("Radio","Mirror","Video","Now Playing","Clock","Weather")
-    private fun widgetCard(heading:String,body:String,large:Boolean=false)=col().apply {
-        setPadding(dp(9),dp(5),dp(8),dp(5))
-        background=bg(glass2,6)
-        addView(txt(heading,10f,blue,true))
-        addView(txt(body,if(large)29f else 14f,bright,large))
+    private val widgetNames=listOf("Music","Radio","Podcasts","Weather","Clock","Now Playing")
+    private fun centered(value:String,size:Float,color:Int=bright,bold:Boolean=false)=txt(value,size,color,bold).apply{
+        gravity=Gravity.CENTER;maxLines=2
     }
-    private fun refreshWidgetClock() { if(page=="Home") drawWidgets() }
-    private fun drawWidgets() {
+    private fun widgetCard(heading:String)=col().apply{
+        background=bg(glass2,8);setPadding(dp(7),dp(4),dp(7),dp(4))
+        addView(centered(heading,10f,blue,true),lp(-1,dp(18)))
+    }
+    private fun refreshWidgetClock(){if(page=="Home")drawWidgets()}
+    private fun drawWidgets(){
         refreshWeather()
         val holder=widgetHolder?:return
         holder.removeAllViews()
-        repeat(2) { pos->
+        val cards=SwipeWidgetStack(this){direction->
+            val pages=widgetNames.size/2
+            widgetIndex=((widgetIndex/2+direction+pages)%pages)*2
+            drawWidgets()
+        }
+        holder.addView(cards,LinearLayout.LayoutParams(-1,0,1f))
+        repeat(2){pos->
             val name=widgetNames[(widgetIndex+pos)%widgetNames.size]
-            val tile=when(name) {
-                "Radio"->widgetCard("RADIO",if(MediaCentre.playingSource=="Radio")MediaCentre.playingName else "Choose a station").apply{setOnClickListener{prefs.edit().putString("media_mode","RADIO").apply();render("Media")}}
-                "Mirror"->widgetCard("MIRROR","Phone connection")
-                "Video"->widgetCard("VIDEO",if(MediaCentre.playingSource=="Video")MediaCentre.playingName else "Local video player").apply{setOnClickListener{prefs.edit().putString("media_mode","MEDIA").putString("media_filter","VIDEO").apply();render("Media")}}
-                "Weather"->widgetCard("WEATHER",weatherText)
-                "Clock"->widgetCard(SimpleDateFormat("EEE d MMM yyyy",Locale.getDefault()).format(Date()),
-                    SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),true)
-                "Now Playing"->widgetCard("NOW PLAYING",if(MediaCentre.playingName.isNotEmpty())MediaCentre.playingName else nowTitle()).apply{setOnClickListener{render("Media")}}
-                else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
-            }
-            if((name=="Now Playing"||name=="Radio") && MediaCentre.cover!=null){
-                tile.addView(ImageView(this).apply{
-                    setImageBitmap(MediaCentre.cover)
-                    scaleType=ImageView.ScaleType.FIT_CENTER
-                },lp(-1,dp(54)))
-            }
-            if(name=="Radio"||name=="Video"||name=="Now Playing"){
-                val active=when(name){
-                    "Radio"->MediaCentre.playingSource=="Radio"
-                    "Video"->MediaCentre.playingSource=="Video"
-                    else->MediaCentre.playingName.isNotBlank()
+            val tile=widgetCard(name.uppercase())
+            when(name){
+                "Weather"->{
+                    val segments=weatherText.split(" | ")
+                    val condition=segments.getOrNull(0)?:"Loading weather"
+                    val icon=condition.takeWhile{!it.isLetter()}.trim().ifBlank{"☁"}
+                    val description=condition.removePrefix(icon).trim()
+                    tile.addView(centered(icon,29f,Color.WHITE),lp(-1,dp(36)))
+                    tile.addView(centered(description,12f,bright,true),lp(-1,dp(24)))
+                    tile.addView(centered(segments.getOrNull(1)?:"",12f,bright),lp(-1,dp(23)))
+                    tile.addView(centered(segments.getOrNull(2)?:"Locating…",10f,dim),lp(-1,dp(21)))
                 }
-                if(active){
-                    val controls=row().apply{gravity=Gravity.CENTER}
-                    for((label,step) in listOf("⏮" to -1,"⏯" to 0,"⏭" to 1)){
-                        controls.addView(txt(label,17f,bright,true).apply{
-                            gravity=Gravity.CENTER
-                            setOnClickListener{
-                                if(step==0)MediaCentre.toggle() else MediaCentre.skip(step)
-                                drawWidgets()
-                            }
-                        },LinearLayout.LayoutParams(0,dp(32),1f))
-                    }
-                    tile.addView(controls)
-                    if(name!="Radio" && MediaCentre.duration()>0){
-                        tile.addView(SeekBar(this).apply{
-                            max=100
-                            progress=(100L*MediaCentre.position()/MediaCentre.duration()).toInt().coerceIn(0,100)
-                            setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                                override fun onProgressChanged(bar:SeekBar?,value:Int,user:Boolean){if(user)MediaCentre.seek(value)}
-                                override fun onStartTrackingTouch(bar:SeekBar?){}
-                                override fun onStopTrackingTouch(bar:SeekBar?){}
-                            })
-                        },lp(-1,dp(24)))
-                    }
+                "Clock"->{
+                    tile.addView(centered(SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date()),36f,bright,true),
+                        LinearLayout.LayoutParams(-1,0,1f))
+                    tile.addView(centered(SimpleDateFormat("EEEE d MMMM yyyy",Locale.getDefault()).format(Date()),13f,dim),
+                        lp(-1,dp(32)))
                 }
-            }
-            tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
-            if(name=="Mirror" || name=="Clock" || name=="Weather")tile.setOnClickListener{expandWidget(name)}
-            val swipeRow=row()
-            swipeRow.addView(tile,LinearLayout.LayoutParams(0,-1,1f))
-            val swipe=txt("⋮",18f,dim,true).apply{
-                gravity=Gravity.CENTER
-                var origin=0f
-                setOnTouchListener{_,event->
-                    when(event.actionMasked){
-                        MotionEvent.ACTION_DOWN->{origin=event.rawY;true}
-                        MotionEvent.ACTION_UP->{
-                            val delta=event.rawY-origin
-                            widgetIndex=(widgetIndex+if(delta< -dp(12))1 else if(delta>dp(12))widgetNames.size-1 else 1)%widgetNames.size
-                            drawWidgets()
-                            true
+                else->{
+                    val kind=when(name){"Music"->"Music";"Radio"->"Radio";"Podcasts"->"Podcast";else->MediaCentre.playingSource}
+                    val active=MediaCentre.playingName.isNotBlank()&&(name=="Now Playing"||MediaCentre.playingSource==kind)
+                    if(active&&MediaCentre.cover!=null){
+                        tile.addView(ImageView(this).apply{
+                            setImageBitmap(MediaCentre.cover);scaleType=ImageView.ScaleType.FIT_CENTER
+                        },lp(-1,dp(49)))
+                    }else{
+                        tile.addView(centered(when(name){"Music"->"♫";"Radio"->"◉";"Podcasts"->"◎";else->"♫"},25f,blue),
+                            lp(-1,dp(43)))
+                    }
+                    tile.addView(centered(if(active)MediaCentre.playingName else when(name){
+                        "Music"->"Choose a track";"Radio"->"Choose a station"
+                        "Podcasts"->"Choose an episode";else->"Nothing playing"
+                    },12f,bright,true),lp(-1,dp(30)))
+                    if(active){
+                        val controls=row().apply{gravity=Gravity.CENTER}
+                        for((symbol,step) in listOf("⏮" to -1,"⏯" to 0,"⏭" to 1)){
+                            controls.addView(centered(symbol,18f,bright,true).apply{
+                                setOnClickListener{
+                                    if(step==0)MediaCentre.toggle() else MediaCentre.skip(step)
+                                    handler.postDelayed({if(page=="Home")drawWidgets()},250)
+                                }
+                            },LinearLayout.LayoutParams(0,dp(29),1f))
                         }
-                        else->true
+                        tile.addView(controls)
+                        if(kind!="Radio"&&MediaCentre.duration()>0){
+                            tile.addView(SeekBar(this).apply{
+                                max=100
+                                progress=(100L*MediaCentre.position()/MediaCentre.duration()).toInt().coerceIn(0,100)
+                                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                                    override fun onProgressChanged(bar:SeekBar?,value:Int,fromUser:Boolean){if(fromUser)MediaCentre.seek(value)}
+                                    override fun onStartTrackingTouch(bar:SeekBar?){}
+                                    override fun onStopTrackingTouch(bar:SeekBar?){}
+                                })
+                            },lp(-1,dp(22)))
+                        }
+                    }
+                    tile.setOnClickListener{
+                        prefs.edit().putString("media_mode",when(name){
+                            "Radio"->"RADIO";"Podcasts"->"PODCASTS";else->"MEDIA"
+                        }).apply()
+                        render("Media")
                     }
                 }
             }
-            swipeRow.addView(swipe,lp(dp(20),-1))
-            holder.addView(swipeRow,LinearLayout.LayoutParams(-1,0,1f).apply{if(pos>0)topMargin=dp(5)})
-
+            cards.addView(tile,LinearLayout.LayoutParams(-1,0,1f).apply{
+                weight=1f;if(pos>0)topMargin=dp(6)
+            })
         }
-        val controls=row().apply {gravity=Gravity.CENTER}
-        val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+widgetNames.size-1)%widgetNames.size;drawWidgets()}}
-        val down=txt("▼",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+1)%widgetNames.size;drawWidgets()}}
-        controls.addView(up,LinearLayout.LayoutParams(dp(40),dp(28)))
-        controls.addView(txt("WIDGETS  ${widgetIndex+1}/${widgetNames.size}",10f,dim).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(28),1f))
-        controls.addView(down,LinearLayout.LayoutParams(dp(40),dp(28)))
-        holder.addView(controls)
-        var startY=0f
-        holder.setOnTouchListener { _,e->
-            when(e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {startY=e.y;true}
-                MotionEvent.ACTION_UP -> {
-                    val dy=e.y-startY
-                    if(kotlin.math.abs(dy)>dp(25)) {
-                        widgetIndex=(widgetIndex+if(dy<0)1 else widgetNames.size-1)%widgetNames.size
-                        drawWidgets()
-                    }
-                    true
-                }
-                else->true
-            }
-        }
+        val pageNumber=widgetIndex/2+1
+        holder.addView(centered("● ".repeat(pageNumber)+"○ ".repeat(widgetNames.size/2-pageNumber),10f,dim),
+            lp(-1,dp(22)))
     }
 
     private fun batteryStatus():String {
