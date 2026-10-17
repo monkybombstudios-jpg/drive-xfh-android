@@ -32,10 +32,10 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Verify APK
-        run: test -s app/build/outputs/apk/debug/app-debug.apk
+        run: ls -lh app/build/outputs/apk/debug/*.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Drive_XFH_v0_1_Android_APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Drive_XFH_v0_16_Android_APKs
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
