@@ -31,6 +31,56 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
     private val view=MapView(context)
     private var scene:MapLibreMap?=null
     private val points=mutableListOf<LatLng>()
+
+    private var positionMarker:org.maplibre.android.annotations.Marker?=null
+    private var gpsListener:android.location.LocationListener?=null
+    private var gpsManager:LocationManager?=null
+    private fun metres(a:LatLng,b:LatLng):Float {
+        val out=FloatArray(1)
+        Location.distanceBetween(a.latitude,a.longitude,b.latitude,b.longitude,out)
+        return out[0]
+    }
+    private fun bearing(a:LatLng,b:LatLng):Double {
+        val one=Location("route").apply{latitude=a.latitude;longitude=a.longitude}
+        val two=Location("route").apply{latitude=b.latitude;longitude=b.longitude}
+        return (one.bearingTo(two).toDouble()+360.0)%360.0
+    }
+    private fun updateFollow(location:Location) {
+        val map=scene?:return
+        if(points.size<2)return
+        val here=LatLng(location.latitude,location.longitude)
+        val nearest=points.indices.minByOrNull{metres(here,points[it])}?:return
+        if(metres(here,points[nearest])>150f)return
+        positionMarker?.position=here
+        var ahead=nearest
+        var distance=0f
+        val targetDistance=if(location.hasSpeed())(location.speed*10f).coerceIn(90f,350f) else 150f
+        while(ahead<points.lastIndex && distance<targetDistance){
+            distance+=metres(points[ahead],points[ahead+1]);ahead++
+        }
+        val next=points[ahead]
+        val angle=if(ahead>nearest)bearing(points[nearest],next) else map.cameraPosition.bearing
+        val focus=LatLng((here.latitude+next.latitude)/2.0,(here.longitude+next.longitude)/2.0)
+        map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
+            CameraPosition.Builder(map.cameraPosition).target(focus).bearing(angle).tilt(58.0).build()),1100)
+    }
+    private fun startFollow(){
+        if(gpsListener!=null||points.size<2)return
+        if(context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return
+        try{
+            val manager=context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val listener=object:android.location.LocationListener{
+                override fun onLocationChanged(location:Location){updateFollow(location)}
+            }
+            manager.requestLocationUpdates(LocationManager.GPS_PROVIDER,2500L,5f,listener)
+            gpsManager=manager;gpsListener=listener
+            manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let{updateFollow(it)}
+        }catch(_:Exception){}
+    }
+    private fun stopFollow(){
+        gpsListener?.let{try{gpsManager?.removeUpdates(it)}catch(_:Exception){}}
+        gpsListener=null;gpsManager=null
+    }
     private fun px(n:Int)=(n*resources.displayMetrics.density).toInt()
     init {
         addView(view,LayoutParams(-1,-1))
@@ -55,26 +105,6 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
             }
             controls.addView(btn,LinearLayout.LayoutParams(px(43),px(43)).apply{bottomMargin=px(5)})
         }
-        val rotationControls=LinearLayout(context).apply {orientation=LinearLayout.HORIZONTAL}
-        for((label,delta) in listOf("↶" to -20.0,"↷" to 20.0)){
-            val btn=TextView(context).apply{
-                text=label;textSize=23f;setTextColor(Color.WHITE);gravity=Gravity.CENTER
-                background=GradientDrawable().apply{
-                    setColor(Color.argb(220,27,27,30));cornerRadius=px(7).toFloat()
-                }
-                setOnClickListener{
-                    scene?.let{map->
-                        val camera=map.cameraPosition
-                        map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
-                            CameraPosition.Builder(camera).bearing((camera.bearing+delta+360.0)%360.0).build()))
-                    }
-                }
-            }
-            rotationControls.addView(btn,LinearLayout.LayoutParams(px(43),px(43)).apply{rightMargin=px(5)})
-        }
-        addView(rotationControls,LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{
-            rightMargin=px(11);bottomMargin=px(160)
-        })
         addView(controls,LayoutParams(-2,-2,Gravity.END or Gravity.BOTTOM).apply{
             rightMargin=px(11);bottomMargin=px(58)
         })
@@ -115,8 +145,9 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                 // Initial 2D overview for long journeys; use 3D close up near the vehicle.
                 val zoom=18.0
                 val tilt=58.0
-                map.cameraPosition=CameraPosition.Builder()
-                    .target(centre).zoom(zoom).tilt(tilt).build()
+                val next=if(points.size>1)points.firstOrNull{metres(points[0],it)>60f}?:points[1] else null
+                val angle=if(next!=null)bearing(points[0],next) else 0.0
+                map.cameraPosition=CameraPosition.Builder().target(centre).zoom(zoom).tilt(tilt).bearing(angle).build()
                 val arrowPosition=points.firstOrNull() ?: here
                 if(arrowPosition!=null) {
                     val arrow=android.graphics.Bitmap.createBitmap(96,96,android.graphics.Bitmap.Config.ARGB_8888)
@@ -131,8 +162,9 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
                     }
                     canvas.drawPath(shape,paint)
                     val icon=org.maplibre.android.annotations.IconFactory.getInstance(context).fromBitmap(arrow)
-                    map.addMarker(MarkerOptions().position(arrowPosition).title(if(points.isNotEmpty())"Trip starting point" else "Current position").icon(icon))
+                    positionMarker=map.addMarker(MarkerOptions().position(arrowPosition).title(if(points.isNotEmpty())"Trip starting point" else "Current position").icon(icon))
                 }
+                startFollow()
             }
         }
         view.onStart()
@@ -148,7 +180,7 @@ class StyledMapPanel(context: Context, private val routeJson: String) : FrameLay
             if(loc==null)null else LatLng(loc.latitude,loc.longitude)
         }catch(_:SecurityException){null}
     }
-    fun resume(){view.onStart();view.onResume()}
-    fun pause(){view.onPause();view.onStop()}
+    fun resume(){view.onStart();view.onResume();startFollow()}
+    fun pause(){stopFollow();view.onPause();view.onStop()}
     fun dispose(){pause();view.onDestroy()}
 }
