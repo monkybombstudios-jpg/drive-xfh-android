@@ -313,6 +313,12 @@ class MainActivity : Activity() {
                 "Now Playing"->widgetCard("NOW PLAYING",if(MediaCentre.playingName.isNotEmpty())MediaCentre.playingName else nowTitle()).apply{setOnClickListener{render("Media")}}
                 else->widgetCard("SHORTCUTS","Navigation · Media\nPhone · Apps").apply{setOnClickListener{render("Apps")}}
             }
+            if((name=="Now Playing"||name=="Radio") && MediaCentre.cover!=null){
+                tile.addView(ImageView(this).apply{
+                    setImageBitmap(MediaCentre.cover)
+                    scaleType=ImageView.ScaleType.FIT_CENTER
+                },lp(-1,dp(54)))
+            }
             if(name=="Radio"||name=="Video"||name=="Now Playing"){
                 val active=when(name){
                     "Radio"->MediaCentre.playingSource=="Radio"
@@ -346,7 +352,27 @@ class MainActivity : Activity() {
             }
             tile.addView(txt("⛶",16f,blue,true).apply{gravity=Gravity.RIGHT;setOnClickListener{expandWidget(name)}})
             if(name=="Mirror" || name=="Clock" || name=="Weather")tile.setOnClickListener{expandWidget(name)}
-            holder.addView(tile,LinearLayout.LayoutParams(-1,0,1f).apply {if(pos>0)topMargin=dp(5)})
+            val swipeRow=row()
+            swipeRow.addView(tile,LinearLayout.LayoutParams(0,-1,1f))
+            val swipe=txt("⋮",18f,dim,true).apply{
+                gravity=Gravity.CENTER
+                var origin=0f
+                setOnTouchListener{_,event->
+                    when(event.actionMasked){
+                        MotionEvent.ACTION_DOWN->{origin=event.rawY;true}
+                        MotionEvent.ACTION_UP->{
+                            val delta=event.rawY-origin
+                            widgetIndex=(widgetIndex+if(delta< -dp(12))1 else if(delta>dp(12))widgetNames.size-1 else 1)%widgetNames.size
+                            drawWidgets()
+                            true
+                        }
+                        else->true
+                    }
+                }
+            }
+            swipeRow.addView(swipe,lp(dp(20),-1))
+            holder.addView(swipeRow,LinearLayout.LayoutParams(-1,0,1f).apply{if(pos>0)topMargin=dp(5)})
+
         }
         val controls=row().apply {gravity=Gravity.CENTER}
         val up=txt("▲",15f,dim,true).apply {gravity=Gravity.CENTER;setOnClickListener{widgetIndex=(widgetIndex+widgetNames.size-1)%widgetNames.size;drawWidgets()}}
