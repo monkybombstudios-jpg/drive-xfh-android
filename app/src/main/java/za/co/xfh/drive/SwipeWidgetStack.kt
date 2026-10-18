@@ -6,35 +6,32 @@ import android.view.ViewConfiguration
 import android.widget.LinearLayout
 import kotlin.math.abs
 
-/** Page two cockpit cards per vertical swipe without intercepting button taps. */
+/** Gesture paging independent of child touch handlers; normal taps reach buttons. */
 class SwipeWidgetStack(context:Context,private val onSwipe:(Int)->Unit):LinearLayout(context){
-    private val slop=ViewConfiguration.get(context).scaledTouchSlop
-    private var downX=0f
-    private var downY=0f
-    private var tracking=false
+    private val minimum=ViewConfiguration.get(context).scaledTouchSlop*5
+    private var firstX=0f
+    private var firstY=0f
+    private var fired=false
     init{orientation=VERTICAL}
-    override fun onInterceptTouchEvent(event:MotionEvent):Boolean{
+    override fun dispatchTouchEvent(event:MotionEvent):Boolean{
         when(event.actionMasked){
-            MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;tracking=false}
+            MotionEvent.ACTION_DOWN->{firstX=event.rawX;firstY=event.rawY;fired=false}
             MotionEvent.ACTION_MOVE->{
-                val dy=event.y-downY
-                if(abs(dy)>slop*2&&abs(dy)>abs(event.x-downX)*1.3f){
-                    tracking=true;parent?.requestDisallowInterceptTouchEvent(true);return true
+                val dy=event.rawY-firstY
+                val dx=event.rawX-firstX
+                if(!fired && abs(dy)>minimum && abs(dy)>abs(dx)*1.4f){
+                    fired=true
+                    val cancel=MotionEvent.obtain(event)
+                    cancel.action=MotionEvent.ACTION_CANCEL
+                    super.dispatchTouchEvent(cancel)
+                    cancel.recycle()
+                    onSwipe(if(dy<0)1 else -1)
+                    return true
                 }
             }
+            MotionEvent.ACTION_CANCEL->{fired=false}
+            MotionEvent.ACTION_UP->{if(fired){fired=false;return true}}
         }
-        return false
-    }
-    override fun onTouchEvent(event:MotionEvent):Boolean{
-        when(event.actionMasked){
-            MotionEvent.ACTION_MOVE->return tracking
-            MotionEvent.ACTION_UP->{
-                val dy=event.y-downY
-                if(tracking&&abs(dy)>slop*3)onSwipe(if(dy<0)1 else -1)
-                tracking=false;return true
-            }
-            MotionEvent.ACTION_CANCEL->{tracking=false;return true}
-        }
-        return true
+        return super.dispatchTouchEvent(event)
     }
 }
