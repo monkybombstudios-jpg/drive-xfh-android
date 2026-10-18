@@ -3,7 +3,7 @@ android {
     namespace = "za.co.xfh.drive"
     compileSdk = 35
     splits { abi { isEnable = true; reset(); include("arm64-v8a","armeabi-v7a"); isUniversalApk = true } }
-    defaultConfig { applicationId = "za.co.xfh.drive"; minSdk = 26; targetSdk = 33; versionCode = 28; versionName = "0.19.1" }
+    defaultConfig { applicationId = "za.co.xfh.drive"; minSdk = 26; targetSdk = 33; versionCode = 29; versionName = "0.19.2" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
