@@ -70,7 +70,7 @@ class PhonePanel(private val host:Activity):LinearLayout(host){
                 cell.addView(circle,FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER))
                 row.addView(cell,LayoutParams(0,dp(41),1f))
             }
-            right.addView(row,LayoutParams(-1,dp(41)))
+            right.addView(row,LayoutParams(dp(174),dp(41)).apply{gravity=Gravity.CENTER_HORIZONTAL})
         }
         val actions=LinearLayout(host).apply{orientation=HORIZONTAL}
         actions.addView(press("⌫"){val t=digits.text;if(t.isNotEmpty())t.delete(t.length-1,t.length)},LayoutParams(0,dp(39),1f))
@@ -82,7 +82,7 @@ class PhonePanel(private val host:Activity):LinearLayout(host){
                 setColor(Color.rgb(37,42,49))
             }
             val phone=ImageView(host).apply{
-                setImageResource(android.R.drawable.ic_menu_call)
+                setImageResource(za.co.xfh.drive.R.drawable.ic_phone_white)
                 setColorFilter(Color.WHITE)
                 scaleType=ImageView.ScaleType.FIT_CENTER
             }
@@ -91,7 +91,7 @@ class PhonePanel(private val host:Activity):LinearLayout(host){
             setOnClickListener{openWhatsApp()}
         }
         actions.addView(whatsapp,LayoutParams(0,dp(39),2f).apply{leftMargin=dp(5)})
-        right.addView(actions)
+        right.addView(actions,LayoutParams(dp(174),dp(39)).apply{gravity=Gravity.CENTER_HORIZONTAL})
         addView(right,LayoutParams(0,-1,1f).apply{leftMargin=dp(7)})
         search.addTextChangedListener(object:android.text.TextWatcher{
             override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
