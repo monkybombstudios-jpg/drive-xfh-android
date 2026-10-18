@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.provider.ContactsContract
 import android.view.Gravity
@@ -57,13 +58,39 @@ class PhonePanel(private val host:Activity):LinearLayout(host){
         for(keyrow in keys){
             val row=LinearLayout(host).apply{orientation=HORIZONTAL}
             for(key in keyrow){
-                row.addView(press(key){digits.append(key)},LayoutParams(0,0,1f).apply{height=dp(39);setMargins(dp(2),dp(1),dp(2),dp(1))})
+                val cell=FrameLayout(host)
+                val circle=press(key){digits.append(key)}.apply{
+                    background=GradientDrawable().apply{
+                        shape=GradientDrawable.OVAL
+                        setColor(Color.rgb(46,48,54))
+                        setStroke(dp(1),Color.rgb(65,68,76))
+                    }
+                    textSize=19f
+                }
+                cell.addView(circle,FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER))
+                row.addView(cell,LayoutParams(0,dp(41),1f))
             }
             right.addView(row,LayoutParams(-1,dp(41)))
         }
         val actions=LinearLayout(host).apply{orientation=HORIZONTAL}
         actions.addView(press("⌫"){val t=digits.text;if(t.isNotEmpty())t.delete(t.length-1,t.length)},LayoutParams(0,dp(39),1f))
-        actions.addView(press("WHATSAPP"){openWhatsApp()},LayoutParams(0,dp(39),2f).apply{leftMargin=dp(5)})
+        val whatsapp=LinearLayout(host).apply{
+            gravity=Gravity.CENTER
+            orientation=HORIZONTAL
+            background=GradientDrawable().apply{
+                cornerRadius=dp(20).toFloat()
+                setColor(Color.rgb(37,42,49))
+            }
+            val phone=ImageView(host).apply{
+                setImageResource(android.R.drawable.ic_menu_call)
+                setColorFilter(Color.WHITE)
+                scaleType=ImageView.ScaleType.FIT_CENTER
+            }
+            addView(phone,LayoutParams(dp(22),dp(22)))
+            addView(text("WHATSAPP",13f,white,true),LayoutParams(-2,dp(35)))
+            setOnClickListener{openWhatsApp()}
+        }
+        actions.addView(whatsapp,LayoutParams(0,dp(39),2f).apply{leftMargin=dp(5)})
         right.addView(actions)
         addView(right,LayoutParams(0,-1,1f).apply{leftMargin=dp(7)})
         search.addTextChangedListener(object:android.text.TextWatcher{
