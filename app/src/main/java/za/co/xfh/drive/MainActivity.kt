@@ -164,11 +164,11 @@ class MainActivity : Activity() {
         top.addView(txt("◉  DRIVE XFH",21f,blue,true),LinearLayout.LayoutParams(0,dp(44),1f))
         top.addView(txt(SimpleDateFormat("EEE d MMM  •  HH:mm",Locale.getDefault()).format(Date()),14f,dim,true))
         top.addView(txt("⚙",22f,dim).apply { setOnClickListener { render("Settings") } })
-        if(to!="Map" && to!="Media" && to!="Apps") outer.addView(top)
+        if(to!="Map" && to!="Media" && to!="Apps" && to!="Phone") outer.addView(top)
         val content = col().apply { setPadding(dp(12),dp(4),dp(12),dp(6)) }
-        if(to == "Map" || to == "Media" || to == "Apps") {
+        if(to == "Map" || to == "Media" || to == "Apps" || to == "Phone") {
             outer.addView(content,LinearLayout.LayoutParams(-1,0,1f))
-            when(to){"Map"->showMap(content);"Media"->showMedia(content);"Apps"->showApps(content)}
+            when(to){"Map"->showMap(content);"Media"->showMedia(content);"Apps"->showApps(content);"Phone"->content.addView(PhonePanel(this),LinearLayout.LayoutParams(-1,-1))}
         } else {
             val scroller = ScrollView(this).apply { isFillViewport=true }
             scroller.addView(content)
@@ -226,8 +226,7 @@ class MainActivity : Activity() {
                 isClickable=true
                 isFocusable=true
                 setOnClickListener {
-                    if(name=="Phone")open(Intent(Intent.ACTION_DIAL))
-                    else if(page!=name)render(name)
+                    if(page!=name)render(name)
                 }
             }
             val icon:View=dockArtwork(name,selected)
@@ -836,6 +835,7 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(req:Int,permissions:Array<out String>,grantResults:IntArray) {
         super.onRequestPermissionsResult(req,permissions,grantResults)
         if(req==100 && grantResults.any{it==PackageManager.PERMISSION_GRANTED})enableLocation()
+        if(req==525 && grantResults.any{it==PackageManager.PERMISSION_GRANTED} && page=="Phone")render("Phone")
     }
     private fun showApps(target:LinearLayout){
         target.setPadding(dp(14),dp(6),dp(14),dp(8))
