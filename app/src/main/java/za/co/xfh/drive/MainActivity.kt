@@ -193,8 +193,7 @@ class MainActivity : Activity() {
     )
     private fun dockArtwork(name:String,selected:Boolean):View {
         if(name=="Phone") return ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_call)
-            rotation = 90f
+            setImageResource(za.co.xfh.drive.R.drawable.ic_phone_white)
             setColorFilter(Color.WHITE)
             scaleType=ImageView.ScaleType.FIT_CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2))
