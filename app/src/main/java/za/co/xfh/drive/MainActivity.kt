@@ -195,7 +195,7 @@ class MainActivity : Activity() {
         if(name=="Phone") return ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_call)
             rotation = 90f
-            setColorFilter(if(selected)blue else bright)
+            setColorFilter(Color.WHITE)
             scaleType=ImageView.ScaleType.FIT_CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2))
         }
@@ -281,7 +281,7 @@ class MainActivity : Activity() {
         val holder=col().apply {
             setPadding(dp(7),dp(7),dp(7),dp(7))
             background=GradientDrawable().apply {
-                setColor(Color.argb(235,25,25,27))
+                setColor(Color.argb(230,25,25,27))
                 cornerRadius=dp(8).toFloat()
                 setStroke(dp(1),Color.rgb(68,68,72))
             }
