@@ -30,7 +30,7 @@ class PhonePanel(private val host:Activity):LinearLayout(host){
         if(bold)typeface=Typeface.DEFAULT_BOLD
         setPadding(dp(5),dp(2),dp(5),dp(2))
     }
-    private fun press(text:String,click:()->Unit)=text(text,16f,white,true).apply{
+    private fun press(label:String,click:()->Unit)=text(label,16f,white,true).apply{
         gravity=Gravity.CENTER;setBackgroundColor(shade);setOnClickListener{click()}
     }
     init{orientation=HORIZONTAL;setPadding(dp(4),dp(4),dp(4),dp(4));setBackgroundColor(Color.rgb(14,14,18));layout()}
